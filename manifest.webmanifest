@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Recorda'm",
+  "short_name": "Recorda'm",
+  "description": "Organitza el teu dia a dia: medicació, cites, activitat física i agenda.",
+  "lang": "ca",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F3EE",
+  "theme_color": "#1B4F8F",
+  "icons": [
+    { "src": "icones/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
