@@ -231,6 +231,9 @@ const TEXTOS = {
     mida_normal: 'Normal',
     mida_gran: 'Gran',
     mida_molt_gran: 'Molt gran',
+    tema_text: "Aspecte de la pantalla",
+    tema_clar: "Mode clar",
+    tema_fosc: "Mode fosc",
 
     avis_emmagatzematge: 'Atenció: aquest navegador no deixa guardar les dades. Es perdran en tancar la pàgina.',
   },
@@ -455,6 +458,9 @@ const TEXTOS = {
     mida_normal: 'Normal',
     mida_gran: 'Grande',
     mida_molt_gran: 'Muy grande',
+    tema_text: "Aspecto de la pantalla",
+    tema_clar: "Modo claro",
+    tema_fosc: "Modo oscuro",
 
     avis_emmagatzematge: 'Atención: este navegador no deja guardar los datos. Se perderán al cerrar la página.',
   },

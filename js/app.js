@@ -44,6 +44,8 @@ const ICONES = {
   cita: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M12 12.5v6M9 15.5h6"/>',
   caminar: '<circle cx="13.5" cy="4" r="2"/><path d="M9 21l2.5-6.5 3 3V21M11.5 14.5 12.5 9l3.5 2.5 3 .5M12.5 9l-3.5 1.5L7.5 14"/>',
   llibreta: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7.5h6M9 11.5h6M9 15.5h4"/>',
+  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+  lluna: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
   campana: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.8 1.5H4.2z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
   campana_no: '<path d="M6 16.5V11a6 6 0 0 1 9.5-4.9M18 11v5.5l1.8 1.5H8"/><path d="M10 20.5a2 2 0 0 0 4 0M3.5 3.5l17 17"/>',
   mes: '<path d="M12 5v14M5 12h14"/>',
@@ -186,9 +188,18 @@ function render() {
   window.scrollTo(0, 0);
 }
 
+// Mode clar o fosc (Ajustos). El color de la barra del navegador també s'adapta.
+function aplicarTema() {
+  const fosc = dades.ajustos.tema === 'fosc';
+  document.documentElement.setAttribute('data-tema', fosc ? 'fosc' : 'clar');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', fosc ? '#12151A' : '#1B4F8F');
+}
+
 function actualitzarCapcalera(esInici) {
   document.documentElement.lang = idioma();
   document.documentElement.setAttribute('data-mida', dades.ajustos.mida);
+  aplicarTema();
   document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = t(el.getAttribute('data-t')); });
   document.querySelectorAll('[data-icona]').forEach(function (el) {
     if (!el.innerHTML) el.outerHTML = icona(el.getAttribute('data-icona'));
@@ -920,7 +931,7 @@ function confirmarEsborrar(cat, id) {
 document.getElementById('btn-ajustos').addEventListener('click', obrirAjustos);
 
 function dibuixarAjustos() {
-  const a = dades.ajustos;
+  const a = Object.assign({ tema: 'clar' }, dades.ajustos);
   const op = function (nom, valor, text, extra) {
     return '<label class="opcio"><input type="radio" name="' + nom + '" value="' + valor + '"' + (a[nom] === valor ? ' checked' : '') + '>' +
       '<span' + (extra ? ' lang="' + extra + '"' : '') + '>' + text + '</span></label>';
@@ -930,6 +941,8 @@ function dibuixarAjustos() {
     '<p class="ajuda">' + esc(t('ajustos_ajuda')) + '</p>' +
     '<fieldset class="grup-ajust"><legend>' + esc(t('idioma')) + '</legend><div class="opcions">' +
     op('idioma', 'ca', 'Català', 'ca') + op('idioma', 'es', 'Castellano', 'es') + '</div></fieldset>' +
+    '<fieldset class="grup-ajust"><legend>' + esc(t('tema_text')) + '</legend><div class="opcions">' +
+    op('tema', 'clar', icona('sol') + esc(t('tema_clar'))) + op('tema', 'fosc', icona('lluna') + esc(t('tema_fosc'))) + '</div></fieldset>' +
     '<fieldset class="grup-ajust"><legend>' + esc(t('mida_text')) + '</legend><div class="opcions">' +
     op('mida', 'normal', esc(t('mida_normal'))) + op('mida', 'gran', esc(t('mida_gran'))) + op('mida', 'molt-gran', esc(t('mida_molt_gran'))) + '</div></fieldset>' +
     '<div class="botons-finestra"><button type="button" class="boto boto-principal" id="ajustos-fet">' + icona('check') + esc(t('fet')) + '</button></div>';
@@ -944,9 +957,16 @@ function obrirAjustos() {
 }
 
 document.getElementById('dlg-ajustos').addEventListener('change', function (e) {
-  if (e.target.name !== 'idioma' && e.target.name !== 'mida') return;
+  if (e.target.name !== 'idioma' && e.target.name !== 'mida' && e.target.name !== 'tema') return;
   dades.ajustos[e.target.name] = e.target.value;
   desar();
+  if (e.target.name === 'tema') {
+    // El mode clar/fosc només canvia colors: no cal redibuixar la pantalla (així no es perd el lloc on era la persona).
+    aplicarTema();
+    const seleccionat = document.querySelector('#dlg-ajustos input[name="tema"][value="' + e.target.value + '"]');
+    if (seleccionat) seleccionat.focus();
+    return;
+  }
   // Es redibuixa la pantalla de sota i la finestra, mantenint el focus a l'opció triada.
   const nom = e.target.name, valor = e.target.value;
   const formulariObert = document.getElementById('formulari');
@@ -959,7 +979,7 @@ document.getElementById('dlg-ajustos').addEventListener('change', function (e) {
 
 document.getElementById('dlg-ajustos').addEventListener('close', function () {
   // Si hi havia un formulari obert, es redibuixa en el nou idioma només si està buit de canvis: el deixem tal com està.
-  document.getElementById('btn-ajustos').focus();
+  document.getElementById('btn-ajustos').focus({ preventScroll: true }); // així no es perd el lloc on era la persona
 });
 
 // ================= Avisos (recordatoris dins de l'aplicació) =================

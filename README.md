@@ -20,6 +20,7 @@ Utilitzeu només dades fictícies.
 | `manifest.webmanifest` | Nom, colors i icones de l'aplicació instal·lada (PWA) |
 | `sw.js` | Service worker: desa una còpia dels fitxers perquè s'obri també sense connexió |
 | `js/pwa.js` | Registra el service worker (només des d'una adreça https) |
+| `js/tema.js` | Aplica el mode clar/fosc abans de pintar la pàgina (perquè no hi hagi un parpelleig) |
 | `icones/` | Logo de Recorda'm (`logo.svg`: campana amb tic, blau i blanc) i icones de l'aplicació (192 i 512 px, versió *maskable*, icona d'Apple i favicon) |
 
 No cal instal·lar res ni compilar res: són fitxers HTML, CSS i JavaScript.
@@ -68,6 +69,10 @@ No utilitzeu la navegació privada: en tancar-la s'esborren les dades.
 ## Mostrar un avís de prova
 
 A `investigadors.html`, apartat 3: trieu un recordatori, trieu «Ara mateix», «D'aquí a 10 segons» o «D'aquí a 30 segons» i premeu **Programar l'avís i obrir Recorda'm**. L'avís apareix dins de l'aplicació quan arriba el moment.
+
+## Mode clar i mode fosc
+
+A **Ajustos** hi ha l'apartat **Aspecte de la pantalla** amb dues opcions: **Mode clar** (per defecte) i **Mode fosc**. El canvi es veu a l'instant, no mou la pantalla i es recorda a cada dispositiu. Tots els parells de colors del mode fosc compleixen un contrast mínim de 4,5:1 (comprovat per a tots els textos de les pantalles i finestres). Els colors són variables de `css/estils.css` (`:root` per al clar i `html[data-tema="fosc"]` per al fosc), i l'ajust es desa a `ajustos.tema` (`'clar'` o `'fosc'`). La pàgina d'investigadors no canvia de tema.
 
 ## Properes tasques (pantalla d'inici)
 

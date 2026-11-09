@@ -9,7 +9,7 @@
 //
 // IMPORTANT: quan canvieu l'estructura de fitxers, pugeu el número de VERSIO.
 
-const VERSIO = 'v7';
+const VERSIO = 'v8';
 const CACHE = 'recordam-' + VERSIO;
 const FITXERS = [
   './',
@@ -22,6 +22,7 @@ const FITXERS = [
   'js/recordatoris.js',
   'js/app.js',
   'js/pwa.js',
+  'js/tema.js',
   'icones/icona-192.png',
   'icones/icona-512.png',
   'icones/icona-maskable-512.png',

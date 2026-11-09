@@ -24,8 +24,64 @@
   --c-act: #2F6B1F;
   --c-agenda: #7B3F98;
 
+  /* Colors auxiliars (també canvien amb el mode fosc) */
+  --camp: #FFFFFF;             /* fons dels camps de formulari i de les opcions */
+  --vora-suau: #D9D6CF;        /* línies separadores (capçalera) */
+  --vora-targeta: #C9C5BC;     /* vora de les targetes */
+  --sobre-primari: #FFFFFF;    /* text sobre el color primari */
+  --sobre-perill: #FFFFFF;     /* text sobre el color de perill */
+  --sobre-cat: #FFFFFF;        /* icona sobre el cercle de color de cada funció */
+  --hover-cat: #FBFAF7;
+  --pendent-fons: #F1EFEA;
+  --text-ok: #12401F;
+  --text-error: #6E1712;
+  --avis-fons: #FFF4D6;
+  --avis-vora: #8A6100;
+  --alerta-fons: #A3231A;      /* franja vermella «Ha passat l'hora!» */
+  --alerta-fons-2: #5E100B;
+  --alerta-text: #FFFFFF;
+  color-scheme: light;
+
   --radi: 0.75rem;
   --espai: 1rem;
+}
+
+/* ---------- Mode fosc (es tria a Ajustos). Tots els parells de colors compleixen un contrast mínim de 4,5:1 ---------- */
+html[data-tema="fosc"] {
+  --fons: #12151A;
+  --superficie: #1C2027;
+  --camp: #14171C;
+  --text: #ECEFF4;            /* sobre superfície: 14,2:1 */
+  --text-suau: #B8C0CC;       /* 8,9:1 */
+  --vora: #8791A0;            /* 5,1:1 */
+  --vora-suau: #343A45;
+  --vora-targeta: #4A5160;
+  --primari: #8DB8F2;
+  --primari-fosc: #B2D1F7;
+  --primari-suau: #1F2F47;
+  --sobre-primari: #0B1D36;
+  --perill: #FF9A91;
+  --perill-suau: #3A1C1B;
+  --sobre-perill: #2A0806;
+  --exit: #86DB9F;
+  --exit-suau: #1B3324;
+  --error: #FF9A91;
+  --focus: #FFD166;
+  --c-med: #4FD8CF;
+  --c-cites: #86B6FF;
+  --c-act: #93DE78;
+  --c-agenda: #DDA8F5;
+  --sobre-cat: #0F1318;
+  --hover-cat: #232832;
+  --pendent-fons: #262B33;
+  --text-ok: #D2F2DC;
+  --text-error: #FFD9D5;
+  --avis-fons: #3B3216;
+  --avis-vora: #E0B341;
+  --alerta-fons: #C62828;
+  --alerta-fons-2: #7F1410;
+  --alerta-text: #FFFFFF;
+  color-scheme: dark;
 }
 
 html { font-size: 112.5%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
@@ -67,7 +123,7 @@ main:focus, h1:focus { outline: none; }
 .capcalera {
   position: sticky; top: 0; z-index: 10;
   background: var(--superficie);
-  border-bottom: 2px solid #D9D6CF;
+  border-bottom: 2px solid var(--vora-suau);
   padding-top: env(safe-area-inset-top);
 }
 .capcalera-dins {
@@ -88,7 +144,7 @@ main:focus, h1:focus { outline: none; }
   padding-right: max(var(--espai), env(safe-area-inset-right));
 }
 
-.avis-sistema { background: #FFF4D6; border-bottom: 2px solid #8A6100; padding: 0.75rem var(--espai); text-align: center; font-weight: 600; }
+.avis-sistema { background: var(--avis-fons); border-bottom: 2px solid var(--avis-vora); padding: 0.75rem var(--espai); text-align: center; font-weight: 600; }
 
 /* ---------- Icones ---------- */
 .icona { display: inline-flex; width: 1.4em; height: 1.4em; flex: none; }
@@ -106,11 +162,11 @@ main:focus, h1:focus { outline: none; }
   touch-action: manipulation; /* evita el zoom accidental amb doble toc */
   position: relative;
 }
-.boto-principal { background: var(--primari); color: #fff; }
+.boto-principal { background: var(--primari); color: var(--sobre-primari); }
 .boto-principal:hover { background: var(--primari-fosc); }
 .boto-secundari { background: var(--superficie); color: var(--primari); border-color: var(--primari); }
 .boto-secundari:hover { background: var(--primari-suau); }
-.boto-perill { background: var(--perill); color: #fff; }
+.boto-perill { background: var(--perill); color: var(--sobre-perill); }
 .boto-perill-suau { background: var(--superficie); color: var(--perill); border-color: var(--perill); }
 .boto-perill-suau:hover { background: var(--perill-suau); }
 .boto-ample { width: 100%; }
@@ -153,8 +209,8 @@ main:focus, h1:focus { outline: none; }
   box-shadow: 0 2px 0 rgba(0,0,0,0.08);
   touch-action: manipulation;
 }
-.boto-cat:hover { background: #FBFAF7; }
-.boto-cat .cercle { display: inline-flex; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border-radius: 50%; background: var(--color-cat); color: #fff; flex: none; }
+.boto-cat:hover { background: var(--hover-cat); }
+.boto-cat .cercle { display: inline-flex; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border-radius: 50%; background: var(--color-cat); color: var(--sobre-cat); flex: none; }
 .boto-cat .cercle .icona { width: 1.9rem; height: 1.9rem; }
 .boto-cat > span:nth-child(2) { flex: 1 1 6rem; min-width: 0; }
 .boto-cat .nom { display: block; font-size: min(1.2rem, 7.5vw); font-weight: 800; }
@@ -169,7 +225,7 @@ html[data-mida="molt-gran"] .boto-cat .fletxa { display: none; }
 
 /* ---------- Seccions ---------- */
 .titol-seccio { display: flex; align-items: center; gap: 0.75rem; }
-.titol-seccio .cercle { display: inline-flex; align-items: center; justify-content: center; width: 2.6rem; height: 2.6rem; border-radius: 50%; background: var(--color-cat); color: #fff; flex: none; }
+.titol-seccio .cercle { display: inline-flex; align-items: center; justify-content: center; width: 2.6rem; height: 2.6rem; border-radius: 50%; background: var(--color-cat); color: var(--sobre-cat); flex: none; }
 .titol-seccio .cercle .icona { width: 1.6rem; height: 1.6rem; }
 .ajuda { color: var(--text-suau); }
 .buit { padding: 1rem; background: var(--superficie); border: 2px dashed var(--vora); border-radius: var(--radi); color: var(--text-suau); }
@@ -177,7 +233,7 @@ html[data-mida="molt-gran"] .boto-cat .fletxa { display: none; }
 .llista { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
 .targeta {
   background: var(--superficie);
-  border: 2px solid #C9C5BC; border-left: 0.5rem solid var(--color-cat);
+  border: 2px solid var(--vora-targeta); border-left: 0.5rem solid var(--color-cat);
   border-radius: var(--radi);
   padding: 1rem;
 }
@@ -198,7 +254,7 @@ html[data-mida="molt-gran"] .boto-cat .fletxa { display: none; }
 /* Estat de les preses */
 .estat { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 800; padding: 0.15rem 0.6rem; border-radius: 999px; border: 2px solid; }
 .estat-feta { color: var(--exit); background: var(--exit-suau); border-color: var(--exit); }
-.estat-pendent { color: var(--text-suau); background: #F1EFEA; border-color: var(--vora); }
+.estat-pendent { color: var(--text-suau); background: var(--pendent-fons); border-color: var(--vora); }
 .presa { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .presa .dades-presa { flex: 1 1 12rem; }
 
@@ -210,8 +266,8 @@ html[data-mida="molt-gran"] .boto-cat .fletxa { display: none; }
   font-weight: 600;
 }
 .missatge .icona { width: 1.6rem; height: 1.6rem; margin-top: 0.1rem; }
-.missatge-ok { background: var(--exit-suau); border-color: var(--exit); color: #12401F; }
-.missatge-error { background: var(--perill-suau); border-color: var(--error); color: #6E1712; }
+.missatge-ok { background: var(--exit-suau); border-color: var(--exit); color: var(--text-ok); }
+.missatge-error { background: var(--perill-suau); border-color: var(--error); color: var(--text-error); }
 .missatge .text { flex: 1; }
 .missatge .boto { min-height: 2.75rem; padding: 0.3rem 0.8rem; }
 
@@ -226,7 +282,7 @@ input[type="text"], input[type="date"], input[type="time"], textarea, select {
   min-height: 3rem;
   padding: 0.5rem 0.75rem;
   font: inherit; color: var(--text);
-  background: #fff;
+  background: var(--camp);
   border: 2px solid var(--vora); border-radius: 0.5rem;
   -webkit-appearance: none; appearance: none;
 }
@@ -243,11 +299,12 @@ fieldset { border: 0; padding: 0; margin: 0 0 1.4rem; min-width: 0; }
   font-size: min(1rem, 6.5vw);
   display: flex; align-items: center; gap: 0.75rem;
   min-height: 3rem; padding: 0.6rem 0.9rem;
-  background: #fff; border: 2px solid var(--vora); border-radius: 0.6rem;
+  background: var(--camp); border: 2px solid var(--vora); border-radius: 0.6rem;
   cursor: pointer; font-weight: 600;
   touch-action: manipulation;
 }
 .opcio span { min-width: 0; overflow-wrap: anywhere; }
+.opcio span .icona { vertical-align: middle; margin-right: 0.5rem; }
 .opcio input { width: 1.5rem; height: 1.5rem; margin: 0; flex: none; accent-color: var(--primari); }
 .opcio:has(input:checked) { border-color: var(--primari); background: var(--primari-suau); box-shadow: inset 0 0 0 1px var(--primari); }
 .opcio:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -322,14 +379,14 @@ fieldset { border: 0; padding: 0; margin: 0 0 1.4rem; min-width: 0; }
 .alerta-vencuda {
   display: flex; align-items: flex-start; gap: 0.6rem;
   margin: 0.5rem 0 0.6rem; padding: 0.7rem 0.9rem;
-  background: var(--perill); color: #fff;
+  background: var(--alerta-fons); color: var(--alerta-text);
   border-radius: 0.5rem; font-weight: 800; line-height: 1.3;
 }
 .alerta-vencuda .icona { width: 1.6rem; height: 1.6rem; margin-top: 0.05rem; }
 
 /* Pampallugueig suau (menys d'un cop per segon) només si la persona no ha demanat menys moviment.
    El missatge es veu igual de bé, parpellegi o no. */
-@keyframes pampallugues { 0%, 100% { background: var(--perill); } 50% { background: #5E100B; } }
+@keyframes pampallugues { 0%, 100% { background: var(--alerta-fons); } 50% { background: var(--alerta-fons-2); } }
 @keyframes ressalt { 0%, 100% { box-shadow: 0 0 0 0 rgba(163, 35, 26, 0.55); } 50% { box-shadow: 0 0 0 0.45rem rgba(163, 35, 26, 0); } }
 @media (prefers-reduced-motion: no-preference) {
   .alerta-vencuda { animation: pampallugues 1.6s ease-in-out infinite; }

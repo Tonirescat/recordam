@@ -17,7 +17,7 @@ function dadesBuides() {
     agenda: [],
     preses: {}, // preses fetes: { "idMedicament|AAAA-MM-DD|HH:MM": true }
     descartats: {}, // avisos retirats només d'aquesta vegada: { "cat|id|AAAA-MM-DD|HH:MM": true }
-    ajustos: { idioma: 'ca', mida: 'normal' },
+    ajustos: { idioma: 'ca', mida: 'normal', tema: 'clar' }, // tema: 'clar' o 'fosc'
   };
 }
 
