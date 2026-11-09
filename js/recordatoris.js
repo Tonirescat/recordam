@@ -30,12 +30,15 @@ function ocurrencies(dades, desde, fins) {
     const quan = crearData(data, hora);
     if (quan < desde || quan > fins) return;
     const minuts = cat === 'med' ? 0 : (r.antelacio || 0);
+    const clau = cat + '|' + r.id + '|' + data + '|' + hora;
+    // Si la persona ha tret l'avís d'aquesta vegada, l'ocurrència continua existint però no avisa.
+    const actiu = !!r.avis && !(dades.descartats && dades.descartats[clau]);
     llista.push({
       cat: cat, id: r.id, registre: r, titol: titolDe(cat, r),
       data: data, hora: hora, quan: quan,
-      avisActiu: !!r.avis, antelacio: minuts,
-      avisQuan: r.avis ? new Date(quan.getTime() - minuts * 60000) : null,
-      clau: cat + '|' + r.id + '|' + data + '|' + hora,
+      avisActiu: actiu, antelacio: minuts,
+      avisQuan: actiu ? new Date(quan.getTime() - minuts * 60000) : null,
+      clau: clau,
     });
   }
 
@@ -85,6 +88,16 @@ function propersRecordatoris(dades, ara, dies, maxim) {
   const fins = new Date(ara.getTime() + dies * 86400000);
   const llista = ocurrencies(dades, ara, fins).filter(function (o) { return o.avisActiu; });
   return maxim ? llista.slice(0, maxim) : llista;
+}
+
+// Properes tasques: tot el que té avís i cau entre l'inici d'avui i el final del dia número «dies»
+// (3 dies = avui, demà i demà passat). Inclou el que ja s'ha fet i el que ja ha passat d'hora avui
+// sense fer-se, perquè la persona ho vegi i ho pugui marcar.
+function tasquesProperes(dades, ara, dies) {
+  const avui = dataISO(ara);
+  const desde = crearData(avui, '00:00');
+  const fins = crearData(sumarDies(avui, dies - 1), '23:59');
+  return ocurrencies(dades, desde, fins).filter(function (o) { return o.avisActiu; });
 }
 
 // Avisos que s'han de mostrar perquè la seva hora d'avís ha arribat entre «de» i «a».

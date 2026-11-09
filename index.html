@@ -12,6 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Recorda'm">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Recorda'm</title>
+  <link rel="icon" type="image/svg+xml" href="icones/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="icones/favicon-32.png">
   <link rel="stylesheet" href="css/estils.css">
 </head>
@@ -22,7 +23,10 @@
         <span class="icona" data-icona="enrere" aria-hidden="true"></span>
         <span data-t="inici">Inici</span>
       </a>
-      <span id="marca" class="marca">Recorda'm</span>
+      <span id="marca" class="marca">
+        <img class="logo-icona" src="icones/logo.svg" alt="" width="40" height="40">
+        <span class="logo-text">Recorda'm</span>
+      </span>
       <button id="btn-ajustos" class="boto boto-capcalera" type="button" aria-haspopup="dialog">
         <span class="icona" data-icona="ajustos" aria-hidden="true"></span>
         <span data-t="ajustos">Ajustos</span>
@@ -48,6 +52,27 @@
     <div class="botons-finestra">
       <button type="button" class="boto boto-perill" id="confirmar-si"></button>
       <button type="button" class="boto boto-secundari" id="confirmar-no"></button>
+    </div>
+  </dialog>
+
+  <!-- Finestra: confirmar que una tasca està feta -->
+  <dialog id="dlg-fet" class="finestra" aria-labelledby="fet-titol" aria-describedby="fet-text">
+    <h2 id="fet-titol"></h2>
+    <p id="fet-text"></p>
+    <div class="botons-finestra">
+      <button type="button" class="boto boto-principal" id="fet-si"></button>
+      <button type="button" class="boto boto-secundari" id="fet-no"></button>
+    </div>
+  </dialog>
+
+  <!-- Finestra: treure un recordatori (no esborra res, només l'avís) -->
+  <dialog id="dlg-treure" class="finestra" aria-labelledby="treure-titol" aria-describedby="treure-text">
+    <h2 id="treure-titol"></h2>
+    <p id="treure-text"></p>
+    <div class="botons-finestra">
+      <button type="button" class="boto boto-principal" id="treure-una"></button>
+      <button type="button" class="boto boto-secundari" id="treure-totes"></button>
+      <button type="button" class="boto boto-secundari" id="treure-no"></button>
     </div>
   </dialog>
 

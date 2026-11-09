@@ -54,6 +54,7 @@ const ICONES = {
   rellotge: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>',
   fletxa: '<path d="M9 5l7 7-7 7"/>',
   desfer: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-3"/>',
+  creu: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
 
 function icona(nom) {
@@ -197,6 +198,35 @@ function actualitzarCapcalera(esInici) {
   document.getElementById('marca').hidden = !esInici;
 }
 
+// ================= Salutació i hora =================
+
+// Bon dia: de 6:00 a 13:59. Bona tarda: de 14:00 a 20:59. Bona nit: de 21:00 a 5:59.
+function claveSalutacio(ara) {
+  const h = ara.getHours();
+  if (h >= 6 && h < 14) return 'salutacio_dia';
+  if (h >= 14 && h < 21) return 'salutacio_tarda';
+  return 'salutacio_nit';
+}
+// «Avui és dilluns, 9 de novembre.» Les paraules d'abans i d'après la data es poden amagar visualment
+// al mòbil (perquè la data i l'hora càpiguen a la mateixa línia); els lectors de pantalla ho llegeixen sencer.
+function textDataAvui() {
+  const marca = '\u0001';
+  const parts = t('avui_es', { data: marca }).split(marca);
+  const data = nomDia(avuiISO()) + ', ' + dataLlarga(avuiISO());
+  return '<span class="data-pref">' + esc(parts[0] || '') + '</span><span class="data-valor">' + esc(data) + '</span><span class="data-pref">' + esc(parts[1] || '') + '</span>';
+}
+function horaAra(ara) { return horaCurta(dosXifres(ara.getHours()) + ':' + dosXifres(ara.getMinutes())); }
+
+// «Firma» de la llista de tasques: canvia quan una tasca es fa, s'esborra o li passa l'hora.
+// Serveix per saber si cal redibuixar la pantalla sense que la persona hagi fet res.
+let firmaMostrada = '';
+function firmaTasques(dies) {
+  const ara = new Date();
+  return avuiISO() + '#' + tasquesProperes(dades, ara, dies).map(function (o) {
+    return o.clau + (dades.preses[o.clau] ? ':F' : (o.quan <= ara ? ':V' : ':-'));
+  }).join(',');
+}
+
 // ================= Pantalla d'inici =================
 
 function vistaInici() {
@@ -207,17 +237,23 @@ function vistaInici() {
       '<span class="fletxa">' + icona('fletxa') + '</span></a></li>';
   }).join('');
 
-  const propers = propersRecordatoris(dades, new Date(), 30, 3);
+  const ara = new Date();
+  const propers = tasquesProperes(dades, ara, 3);
+  firmaMostrada = firmaTasques(3);
   const llista = propers.length
-    ? '<ul class="llista">' + propers.map(function (o) { return elementRecordatori(o, false); }).join('') + '</ul>'
+    ? '<ul class="llista llista-tasques">' + propers.map(function (o) { return elementRecordatori(o, false); }).join('') + '</ul>'
     : '<p class="buit">' + esc(t('cap_recordatori')) + '</p>';
 
-  return '<div class="salutacio"><h1>' + esc(t('hola')) + '</h1><p>' + esc(t('avui_es', { data: nomDia(avuiISO()) + ', ' + dataLlarga(avuiISO()) })) + '</p></div>' +
+  return '<div class="salutacio"><h1 id="salutacio-text">' + esc(t(claveSalutacio(ara))) + '</h1>' +
+    '<div class="salutacio-fila">' +
+      '<p class="data-avui">' + textDataAvui() + '</p>' +
+      '<p class="hora-actual">' + icona('rellotge') + '<span>' + esc(t('hora_actual')) + '</span> <strong id="hora-actual-valor">' + esc(horaAra(ara)) + '</strong></p>' +
+    '</div></div>' +
     '<h2 class="visualment-amagat">' + esc(t('que_vols_fer')) + '</h2>' +
     '<ul class="graella-cat">' + cats + '</ul>' +
     '<section aria-labelledby="titol-propers"><h2 id="titol-propers" class="titol-seccio">' + icona('campana') + esc(t('propers')) + '</h2>' +
     llista +
-    '<div class="fila-botons"><a class="boto boto-secundari boto-ample" href="#recordatoris">' + esc(t('veure_tots')) + icona('fletxa') + '</a></div>' +
+    '<div class="fila-botons"><a class="boto boto-secundari boto-ample" href="#recordatoris-7">' + esc(t('veure_tots')) + icona('fletxa') + '</a></div>' +
     '</section>';
 }
 
@@ -253,28 +289,65 @@ function estatPresa(o) {
     : '<span class="estat estat-pendent">' + icona('rellotge') + esc(t('pendent')) + '</span>';
 }
 
-// Element d'un recordatori. «complet» afegeix detalls i botons (pantalla de recordatoris).
+// Botó «x Treure» de cada recordatori. Només treu l'avís: no esborra el medicament, la cita ni la tasca.
+function botoTreure(o) {
+  return '<button type="button" class="boto boto-treure boto-compacte" data-accio="treure-avis" data-clau="' + esc(o.clau) + '" aria-label="' +
+    esc(t('treure_aria', { nom: o.titol, quan: quanText(o.data, o.hora) })) + '">' +
+    icona('creu') + '<span>' + esc(t('treure')) + '</span></button>';
+}
+
+// Un recordatori «es repeteix» si el registre té més d'una ocurrència (medicació, o activitat/agenda repetides).
+function esRepetit(o) {
+  if (o.cat === 'med') return true;
+  if (o.cat === 'cites') return false;
+  return !!o.registre.rep && o.registre.rep !== 'un';
+}
+
+// «Avui», «Demà» o «Dimecres 11» (curt, perquè la targeta no creixi).
+function diaCurt(iso) {
+  if (iso === avuiISO()) return t('today_curt');
+  if (iso === sumarDies(avuiISO(), 1)) return t('tomorrow_curt');
+  return nomDia(iso) + ' ' + Number(iso.slice(8, 10));
+}
+
+// Una tasca de la llista «Properes tasques»: targeta compacta amb l'hora a l'esquerra.
+// L'avís vermell només surt quan ja ha passat l'hora i la tasca no està feta.
+// «complet» afegeix el detall i el botó de canviar (llista de 7 dies).
 function elementRecordatori(o, complet) {
+  const ara = new Date();
+  const feta = !!dades.preses[o.clau];
+  const vencuda = !feta && o.quan <= ara;
   const detall = detallOcurrencia(o);
-  let html = '<li class="targeta cat-' + o.cat + '">' + etiquetaCat(o.cat) +
-    '<h3>' + esc(o.titol) + '</h3>' +
-    '<p class="linia"><strong>' + esc(complet ? t('hora_x', { hora: horaCurta(o.hora) }) : quanText(o.data, o.hora).replace(/^./, function (c) { return c.toUpperCase(); })) + '</strong></p>';
+  const clauAttr = esc(o.clau);
+  const classes = 'targeta tasca cat-' + o.cat + (feta ? ' tasca-feta' : '') + (vencuda ? ' tasca-vencuda' : '') + (complet ? ' tasca-complet' : '');
+
+  let meta = etiquetaCat(o.cat);
+  if (!complet) meta += '<span class="tasca-dia">' + esc(diaCurt(o.data)) + '</span>';
+  if (feta) meta += '<span class="estat estat-feta">' + icona('check') + esc(t('fet_estat')) + '</span>';
+  if (!feta && o.quan <= ara) meta += '<span class="alerta-vencuda">' + icona('alerta') + '<span>' + esc(t('vencuda')) + '</span></span>';
+
+  let html = '<li class="' + classes + '">' +
+    '<div class="tasca-hora">' + esc(horaCurta(o.hora)) + '</div>' +
+    '<div class="tasca-cos">' +
+      '<h3 class="tasca-titol">' + esc(o.titol) + '</h3>' +
+      '<div class="tasca-meta">' + meta + '</div>';
+  if (complet && detall) html += '<p class="tasca-detall">' + esc(detall) + '</p>';
+
+  html += '</div><div class="tasca-botons">' +
+    (feta
+      ? '<button type="button" class="boto boto-secundari boto-compacte" data-accio="desfer-fet" data-clau="' + clauAttr + '">' + icona('desfer') + esc(t('desfer')) + '</button>'
+      : '<button type="button" class="boto boto-principal boto-compacte" data-accio="fet" data-clau="' + clauAttr + '">' + icona('check') + esc(t('fet_boto')) + '</button>') +
+    botoTreure(o);
   if (complet) {
-    if (detall) html += '<p class="linia">' + esc(detall) + '</p>';
-    html += liniaAvis(o.cat, o.registre);
-    if (o.cat === 'med' && o.data === avuiISO()) html += '<p class="linia">' + estatPresa(o) + '</p>';
-    html += '<div class="fila-botons">';
-    if (o.cat === 'med' && o.data === avuiISO()) html += botoPresa(o);
-    html += '<a class="boto boto-secundari" href="#' + CATEGORIES[o.cat].ruta + '-editar-' + encodeURIComponent(o.id) + '">' + icona('llapis') + esc(t('canviar')) + '</a>';
-    html += '</div>';
+    html += '<a class="boto boto-secundari boto-compacte" href="#' + CATEGORIES[o.cat].ruta + '-editar-' + encodeURIComponent(o.id) + '">' + icona('llapis') + esc(t('canviar')) + '</a>';
   }
-  return html + '</li>';
+  html += '</div></li>';
+  return html;
 }
 
 function vistaRecordatoris(dies) {
-  const ara = new Date();
-  const fins = crearData(sumarDies(avuiISO(), dies - 1), '23:59');
-  const llista = ocurrencies(dades, ara, fins).filter(function (o) { return o.avisActiu; });
+  const llista = tasquesProperes(dades, new Date(), dies);
+  firmaMostrada = firmaTasques(dies);
   const canvi = dies === 3
     ? '<a class="boto boto-secundari boto-ample" href="#recordatoris-7">' + esc(t('veure_7')) + icona('fletxa') + '</a>'
     : '<a class="boto boto-secundari boto-ample" href="#recordatoris">' + esc(t('veure_3')) + '</a>';
@@ -285,7 +358,7 @@ function vistaRecordatoris(dies) {
     if (o.data !== diaActual) {
       if (diaActual) html += '</ul></section>';
       diaActual = o.data;
-      html += '<section class="dia-grup"><h2>' + esc(diaRelatiu(o.data, true) + (o.data === avuiISO() || o.data === sumarDies(avuiISO(), 1) ? ', ' + nomDia(o.data) + ' ' + dataLlarga(o.data) : '')) + '</h2><ul class="llista">';
+      html += '<section class="dia-grup"><h2>' + esc(diaRelatiu(o.data, true) + (o.data === avuiISO() || o.data === sumarDies(avuiISO(), 1) ? ', ' + nomDia(o.data) + ' ' + dataLlarga(o.data) : '')) + '</h2><ul class="llista llista-tasques">';
     }
     html += elementRecordatori(o, true);
   });
@@ -719,6 +792,9 @@ main.addEventListener('click', function (e) {
   }
   if (accio === 'esborrar') confirmarEsborrar(b.getAttribute('data-cat'), b.getAttribute('data-id'));
   if (accio === 'presa') canviarPresa(b.getAttribute('data-clau'));
+  if (accio === 'treure-avis') confirmarTreureAvis(b.getAttribute('data-clau'));
+  if (accio === 'fet') confirmarFet(b.getAttribute('data-clau'));
+  if (accio === 'desfer-fet') desferFet(b.getAttribute('data-clau'));
 });
 
 function canviarPresa(clau) {
@@ -731,6 +807,87 @@ function canviarPresa(clau) {
   focusDespres = '[data-accio="presa"][data-clau="' + clau.replace(/"/g, '\\"') + '"]';
   render();
   anunciar(t(feta ? 'presa_marcada' : 'presa_desfeta', { nom: nom, hora: horaCurta(parts[3]) }));
+}
+
+// ---------- Marcar una tasca com a feta (amb confirmació) ----------
+function selectorBoto(accio, clau) { return '[data-accio="' + accio + '"][data-clau="' + clau.replace(/"/g, '\\"') + '"]'; }
+
+function confirmarFet(clau) {
+  const o = buscarOcurrencia(dades, clau);
+  if (!o) return;
+  const dlg = document.getElementById('dlg-fet');
+  const si = document.getElementById('fet-si');
+  const no = document.getElementById('fet-no');
+  const valors = { nom: o.titol, quan: quanText(o.data, o.hora) };
+  document.getElementById('fet-titol').textContent = t('fet_titol');
+  document.getElementById('fet-text').textContent = t('fet_text', valors);
+  si.innerHTML = icona('check') + esc(t('fet_si'));
+  no.textContent = t('fet_no');
+  const origen = document.activeElement;
+  si.onclick = function () {
+    dlg.close();
+    dades.preses[clau] = true;
+    desar();
+    focusDespres = selectorBoto('desfer-fet', clau);
+    render();
+    anunciar(t('fet_marcat', valors));
+  };
+  no.onclick = function () { dlg.close(); if (origen) origen.focus(); };
+  dlg.showModal();
+  no.focus({ preventScroll: true });
+  dlg.scrollTop = 0;
+}
+
+function desferFet(clau) {
+  const o = buscarOcurrencia(dades, clau);
+  delete dades.preses[clau];
+  desar();
+  focusDespres = selectorBoto('fet', clau);
+  render();
+  if (o) anunciar(t('fet_desmarcat', { nom: o.titol }));
+}
+
+// ---------- Treure un recordatori amb confirmació ----------
+// Només es treu l'avís. El medicament, la cita o la tasca continuen guardats al seu apartat.
+function confirmarTreureAvis(clau) {
+  const o = buscarOcurrencia(dades, clau);
+  if (!o) return;
+  const dlg = document.getElementById('dlg-treure');
+  const una = document.getElementById('treure-una');
+  const totes = document.getElementById('treure-totes');
+  const no = document.getElementById('treure-no');
+  const rep = esRepetit(o);
+  const valors = { nom: o.titol, quan: quanText(o.data, o.hora), apartat: t(CATEGORIES[o.cat].nom) };
+
+  document.getElementById('treure-titol').textContent = t('treure_titol');
+  document.getElementById('treure-text').textContent = t(rep ? 'treure_text_rep' : 'treure_text_un', valors);
+  una.textContent = t(rep ? 'treure_una' : 'treure_si');
+  totes.textContent = t('treure_totes');
+  totes.hidden = !rep;
+  no.textContent = t('treure_no');
+  const origen = document.activeElement;
+  const sortir = function (missatge) {
+    dlg.close();
+    desar();
+    anar(location.hash.replace(/^#/, '') || 'inici');  // sense missatge visible: la tasca simplement desapareix de la llista
+    anunciar(missatge);                                // només s'anuncia als lectors de pantalla
+  };
+
+  una.onclick = function () {
+    if (rep) {
+      if (!dades.descartats) dades.descartats = {};
+      dades.descartats[clau] = true;
+      sortir(t('avis_tret_una', valors));
+    } else {
+      o.registre.avis = false;
+      sortir(t('avis_tret_tots', valors));
+    }
+  };
+  totes.onclick = function () { o.registre.avis = false; sortir(t('avis_tret_tots', valors)); };
+  no.onclick = function () { dlg.close(); if (origen) origen.focus(); };
+  dlg.showModal();
+  no.focus({ preventScroll: true }); // l'opció segura rep el focus
+  dlg.scrollTop = 0;                 // amb lletra molt gran, es comença llegint pel títol
 }
 
 // ---------- Esborrar amb confirmació ----------
@@ -877,6 +1034,42 @@ function mostrarSeguentAvis() {
 }
 
 setInterval(comprovarAvisos, 5000);
+
+// Cada pocs segons: posa al dia l'hora i la salutació, i si una tasca ha passat d'hora o ha canviat
+// de dia, redibuixa la llista sense moure la pantalla ni perdre el botó que tenia el focus.
+let vencudesConegudes = null;
+function algunDialegObert() {
+  return Array.prototype.some.call(document.querySelectorAll('dialog'), function (d) { return d.open; });
+}
+function refrescarPantalla() {
+  const ara = new Date();
+  const hora = document.getElementById('hora-actual-valor'); if (hora) hora.textContent = horaAra(ara);
+  const salut = document.getElementById('salutacio-text'); if (salut) salut.textContent = t(claveSalutacio(ara));
+
+  const r = ruta();
+  const esTasques = r.vista === 'recordatoris' || (!catDeRuta(r.vista) && r.vista !== 'recordatoris');
+  if (!esTasques || document.getElementById('formulari')) return;
+  const dies = r.vista === 'recordatoris' ? (r.accio === '7' ? 7 : 3) : 3;
+
+  // Tasques que acaben de passar d'hora: s'anuncien als lectors de pantalla (no a la primera passada).
+  const vencudes = tasquesProperes(dades, ara, dies).filter(function (o) { return !dades.preses[o.clau] && o.quan <= ara; });
+  if (vencudesConegudes) {
+    const noves = vencudes.filter(function (o) { return !vencudesConegudes.has(o.clau); });
+    if (noves.length) anunciar(t('vencuda_anunci', { nom: noves[0].titol, hora: horaCurta(noves[0].hora) }));
+  }
+  vencudesConegudes = new Set(vencudes.map(function (o) { return o.clau; }));
+
+  if (firmaTasques(dies) === firmaMostrada || algunDialegObert()) return;
+  const y = window.scrollY;
+  const actiu = document.activeElement;
+  if (actiu && main.contains(actiu) && actiu.getAttribute('data-clau')) {
+    focusDespres = selectorBoto(actiu.getAttribute('data-accio'), actiu.getAttribute('data-clau'));
+  }
+  render();
+  window.scrollTo(0, y);
+}
+setInterval(refrescarPantalla, 10000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) refrescarPantalla(); });
 document.addEventListener('visibilitychange', function () { if (!document.hidden) comprovarAvisos(); });
 
 // Si les dades canvien en una altra pestanya (per exemple, la pàgina d'investigadors), es recarreguen.
@@ -887,6 +1080,14 @@ window.addEventListener('storage', function (e) {
 
 // ================= Començar =================
 document.getElementById('avis-emmagatzematge').textContent = t('avis_emmagatzematge');
+(function netejarDescartats() {
+  const limit = sumarDies(avuiISO(), -2);
+  let canvi = false;
+  Object.keys(dades.descartats || {}).forEach(function (k) {
+    if ((k.split('|')[2] || '') < limit) { delete dades.descartats[k]; canvi = true; }
+  });
+  if (canvi) guardarDades(dades);
+})();
 (function () {
   try { localStorage.setItem('recordam.prova', '1'); localStorage.removeItem('recordam.prova'); }
   catch (e) { emmagatzematgeDisponible = false; }

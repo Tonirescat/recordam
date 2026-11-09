@@ -9,7 +9,7 @@
 //
 // IMPORTANT: quan canvieu l'estructura de fitxers, pugeu el número de VERSIO.
 
-const VERSIO = 'v1';
+const VERSIO = 'v7';
 const CACHE = 'recordam-' + VERSIO;
 const FITXERS = [
   './',
@@ -26,7 +26,8 @@ const FITXERS = [
   'icones/icona-512.png',
   'icones/icona-maskable-512.png',
   'icones/apple-touch-icon.png',
-  'icones/favicon-32.png'
+  'icones/favicon-32.png',
+  'icones/logo.svg'
 ];
 
 self.addEventListener('install', function (e) {

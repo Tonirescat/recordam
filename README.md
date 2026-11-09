@@ -10,7 +10,7 @@ Utilitzeu només dades fictícies.
 
 | Fitxer | Què fa |
 | --- | --- |
-| `index.html` | L'aplicació (Inici, Medicació, Cites mèdiques, Activitat física, Agenda, Propers recordatoris) |
+| `index.html` | L'aplicació (Inici, Medicació, Cites mèdiques, Activitat física, Agenda, Properes tasques) |
 | `investigadors.html` | Pàgina per als investigadors: reiniciar dades i mostrar avisos de prova. No té cap enllaç des de l'aplicació |
 | `css/estils.css` | Colors, mides i adaptació a pantalles |
 | `js/textos.js` | Tots els textos en català i castellà |
@@ -20,7 +20,7 @@ Utilitzeu només dades fictícies.
 | `manifest.webmanifest` | Nom, colors i icones de l'aplicació instal·lada (PWA) |
 | `sw.js` | Service worker: desa una còpia dels fitxers perquè s'obri també sense connexió |
 | `js/pwa.js` | Registra el service worker (només des d'una adreça https) |
-| `icones/` | Icones de l'aplicació (192 i 512 px, versió *maskable*, icona d'Apple i favicon) |
+| `icones/` | Logo de Recorda'm (`logo.svg`: campana amb tic, blau i blanc) i icones de l'aplicació (192 i 512 px, versió *maskable*, icona d'Apple i favicon) |
 
 No cal instal·lar res ni compilar res: són fitxers HTML, CSS i JavaScript.
 Si s'obre amb doble clic (adreça `file://`) funciona igual, però sense les parts de PWA (instal·lació i ús sense connexió), que només van des d'una adreça https.
@@ -68,6 +68,28 @@ No utilitzeu la navegació privada: en tancar-la s'esborren les dades.
 ## Mostrar un avís de prova
 
 A `investigadors.html`, apartat 3: trieu un recordatori, trieu «Ara mateix», «D'aquí a 10 segons» o «D'aquí a 30 segons» i premeu **Programar l'avís i obrir Recorda'm**. L'avís apareix dins de l'aplicació quan arriba el moment.
+
+## Properes tasques (pantalla d'inici)
+
+- **Capçalera de l'inici:** salutació segons l'hora (**Bon dia** de 6:00 a 13:59, **Bona tarda** de 14:00 a 20:59, **Bona nit** de 21:00 a 5:59), la data a l'esquerra i l'hora actual a la dreta, a la mateixa línia (al mòbil s'abrevia la data, «Dilluns, 9 de novembre», i s'amaga el text «Hora actual:» perquè hi càpiguen). L'hora i la salutació s'actualitzen soles.
+- **«Properes tasques»** mostra només el que cau en els **3 propers dies** (avui, demà i demà passat) i té l'avís activat. El botó **Veure la setmana** obre la llista de 7 dies (des d'allà també es pot tornar als 3 dies).
+- Les tasques són targetes **compactes**: l'hora a l'esquerra (columna d'amplada fixa, perquè tots els títols quedin alineats), el títol, la categoria i el dia (Avui, Demà o «dimecres 11»). La distribució s'adapta a l'amplada de la targeta: al **mòbil** els botons ocupen una fila a sota, repartits a parts iguals; a **tauleta o ordinador** (targeta ampla) passen a la dreta, centrats en vertical i tots de la mateixa amplada. Amb la lletra molt gran, sempre es fa servir la distribució de mòbil.
+- **Cada tasca** de la llista (d'avui, de demà i de demà passat) té el botó **Fet** i el botó **Treure**. Quan s'afegeix un recordatori amb avís i cau en aquests 3 dies, hi surt amb tots dos. «Fet» sempre demana confirmació («Ja ho has fet?») i es pot desfer amb **Desfer**.
+- **Avís vermell:** només surt quan ja ha arribat l'hora (o ha passat) i la tasca no està feta: una franja petita amb «Ha passat l'hora!» i la targeta es posa en vermell clar. Pampalluga suaument; si el dispositiu té activada la preferència de «reduir moviment», no pampalluga però es veu igual. Els lectors de pantalla ho anuncien quan passa. Abans de l'hora no surt cap avís.
+- Quan es marca com a feta, l'avís desapareix i la targeta es posa en verd.
+- Les tasques fetes es queden a la llista, en verd, i es poden desfer.
+- Les tasques d'abans d'avui ja no hi surten.
+
+## Treure un recordatori
+
+A cada targeta de «Properes tasques» (pantalla d'inici i llista de 7 dies) hi ha el botó **✕ Treure**. Sempre demana confirmació i **no esborra res**: el medicament, la cita o la tasca continuen guardats al seu apartat.
+
+- En treure una tasca **no surt cap missatge a dalt**: la targeta simplement desapareix de la llista (els lectors de pantalla sí que en reben l'avís parlat).
+- Si el recordatori no es repeteix (per exemple, una cita), es treu l'avís.
+- Si es repeteix (medicació, o activitats i agenda repetides), la persona tria entre **Només aquesta vegada** o **Treure tots els avisos**.
+- Per tornar a activar els avisos d'alguna cosa: apartat corresponent → **Canviar** → casella de l'avís.
+- «Només aquesta vegada» es desa a `descartats` (dades.js) i s'esborra sol al cap de dos dies.
+- Les tasques fetes es desen a `preses` (dades.js), amb la mateixa clau de cada ocurrència, tant per a medicació com per a la resta.
 
 ## Canviar textos
 
