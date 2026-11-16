@@ -40,6 +40,10 @@
   --alerta-fons: #A3231A;      /* franja vermella «Ha passat l'hora!» */
   --alerta-fons-2: #5E100B;
   --alerta-text: #FFFFFF;
+  --desar: #1E6B34;            /* botó Desar (verd), text blanc a sobre: 6,2:1 */
+  --sobre-desar: #FFFFFF;
+  --cancela: #A3231A;          /* botó Cancel·lar (vermell), text blanc a sobre: 7,5:1 */
+  --sobre-cancela: #FFFFFF;
   color-scheme: light;
 
   --radi: 0.75rem;
@@ -81,11 +85,16 @@ html[data-tema="fosc"] {
   --alerta-fons: #C62828;
   --alerta-fons-2: #7F1410;
   --alerta-text: #FFFFFF;
+  --desar: #86DB9F;
+  --sobre-desar: #07200F;
+  --cancela: #FF9A91;
+  --sobre-cancela: #2A0806;
   color-scheme: dark;
 }
 
 html { font-size: 112.5%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
-  scroll-padding-top: 6rem; /* la capçalera fixa no tapa l'element que té el focus (WCAG 2.4.11) */ }
+  scroll-padding-top: 6rem; /* la capçalera fixa no tapa l'element que té el focus (WCAG 2.4.11) */
+  scroll-padding-bottom: 7rem; /* la barra fixa de Desar / Cancel·lar tampoc */ }
 html[data-mida="gran"] { font-size: 137.5%; }
 html[data-mida="molt-gran"] { font-size: 162.5%; }
 
@@ -318,8 +327,22 @@ fieldset { border: 0; padding: 0; margin: 0 0 1.4rem; min-width: 0; }
 
 .amagat { display: none !important; }
 
-.botons-form { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
-.botons-form .boto { flex: 1 1 10rem; min-height: 3.4rem; }
+/* Barra fixa a baix de tots els formularis: Cancel·lar (vermell) a l'esquerra i Desar (verd) a la dreta. */
+.botons-form {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9;
+  background: var(--superficie); border-top: 3px solid var(--vora-targeta);
+  padding: 0.6rem max(var(--espai), env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) max(var(--espai), env(safe-area-inset-left));
+}
+.botons-form-dins { max-width: 44rem; margin: 0 auto; display: flex; gap: 0.75rem; }
+.botons-form .boto { flex: 1 1 0; min-width: 0; min-height: 3.4rem; font-size: min(1.05rem, 4.7vw); flex-wrap: nowrap; overflow-wrap: normal; gap: 0.35rem; padding-left: 0.5rem; padding-right: 0.5rem; }
+.botons-form .icona { width: 1.1em; height: 1.1em; }
+.boto-desar { background: var(--desar); color: var(--sobre-desar); }
+.boto-desar:hover { filter: brightness(0.92); }
+.boto-cancela { background: var(--cancela); color: var(--sobre-cancela); }
+.boto-cancela:hover { filter: brightness(0.92); }
+/* La pantalla deixa lloc a sota perquè la barra fixa no tapi l'últim camp */
+.contenidor:has(.botons-form) { padding-bottom: 7.5rem; }
+html[data-mida="molt-gran"] .contenidor:has(.botons-form) { padding-bottom: 10rem; }
 
 /* ---------- Finestres (diàlegs) ---------- */
 .finestra {
@@ -432,3 +455,78 @@ fieldset { border: 0; padding: 0; margin: 0 0 1.4rem; min-width: 0; }
 /* Avís vermell: una franja petita dins la línia de la categoria; només surt quan ja ha passat l'hora */
 .tasca .alerta-vencuda { margin: 0; padding: 0.1rem 0.6rem; font-size: 0.9rem; font-weight: 800; align-items: center; gap: 0.4rem; width: fit-content; max-width: 100%; }
 .tasca .alerta-vencuda .icona { width: 1.1rem; height: 1.1rem; margin-top: 0; }
+
+
+/* ================= Versió 9 ================= */
+
+.boto-fet { background: var(--exit-suau); color: var(--exit); border-color: var(--exit); }
+.boto-fet:hover { filter: brightness(0.95); }
+.fila-dos .boto { flex: 1 1 14rem; }
+
+/* ---------- Medicació i exercicis: moments del dia ---------- */
+.moments { display: grid; gap: 1rem; margin-bottom: 0.5rem; }
+.moment {
+  background: var(--superficie);
+  border: 2px solid var(--vora-targeta); border-left: 0.5rem solid var(--color-cat);
+  border-radius: var(--radi);
+  padding: 0.75rem 1rem 1rem;
+}
+.moment-titol { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.6rem; font-size: min(1.3rem, 7vw); color: var(--color-cat); }
+.moment-titol .icona { width: 1.6rem; height: 1.6rem; }
+.moment-buit { margin: 0; padding: 0.7rem 0.9rem; background: var(--pendent-fons); border-radius: 0.5rem; color: var(--text-suau); font-weight: 600; }
+.llista-dosis { gap: 0.6rem; }
+.dosi {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--camp); border: 2px solid var(--vora-targeta); border-radius: 0.6rem;
+}
+.dosi-feta { background: var(--exit-suau); border-color: var(--exit); }
+.dosi-vencuda { background: var(--perill-suau); border-color: var(--perill); }
+.dosi-text { flex: 1 1 11rem; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+.dosi-text h3 { margin: 0; font-size: 1.2rem; }
+.dosi-text .linia { margin: 0; color: var(--text-suau); }
+.dosi .estat { padding: 0 0.5rem; font-size: 0.9rem; }
+.dosi .alerta-vencuda { margin: 0.1rem 0 0; padding: 0.1rem 0.6rem; font-size: 0.9rem; font-weight: 800; align-items: center; gap: 0.4rem; width: fit-content; max-width: 100%; }
+.dosi .alerta-vencuda .icona { width: 1.1rem; height: 1.1rem; margin-top: 0; }
+.dosi-botons { display: flex; flex-wrap: wrap; gap: 0.5rem; flex: 1 1 14rem; }
+.dosi-botons .boto-compacte { flex: 1 1 6rem; }
+.dosi-botons .boto-treure { margin-left: 0; }
+
+/* ---------- Encara no hi ha res: missatge al mig i botó d'afegir ---------- */
+.estat-buit { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1.25rem; text-align: center; padding: 18dvh 0 1rem; }
+.estat-buit p { margin: 0; max-width: 24rem; min-height: 3.2em; display: flex; align-items: flex-end; justify-content: center; font-size: 1.25rem; font-weight: 700; color: var(--text-suau); }
+.estat-buit .boto { width: 100%; max-width: 24rem; min-height: 3.6rem; font-size: 1.15rem; }
+
+/* ---------- La propera cita / el proper esdeveniment ---------- */
+.propera { margin-bottom: 0.5rem; }
+.propera-cap { margin: 0.25rem 0 0.6rem; font-size: min(1.25rem, 7.5vw); }
+.propera-targeta {
+  background: var(--superficie);
+  border: 2px solid var(--vora-targeta); border-left: 0.6rem solid var(--color-cat);
+  border-radius: var(--radi);
+  padding: 1rem 1.1rem;
+}
+.propera-quan { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.1rem 1rem; }
+.propera-dia { font-size: min(1.6rem, 8vw); font-weight: 800; color: var(--color-cat); line-height: 1.2; }
+.propera-hora { display: inline-flex; align-items: center; gap: 0.4rem; font-size: min(2.1rem, 10vw); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.propera-hora .icona { width: 1.2em; height: 1.2em; color: var(--text-suau); }
+.propera-data { margin: 0.1rem 0 0.4rem; color: var(--text-suau); }
+.propera-titol { font-size: min(1.4rem, 7.5vw); margin: 0.4rem 0 0.5rem; }
+.propera-targeta .linia { margin: 0.2rem 0; }
+
+/* ---------- Formularis: opcions dels moments del dia ---------- */
+.opcions-moments { grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); }
+
+/* Medicació: un sol botó (Fet / Pendent) al costat, sempre amb la mateixa mida.
+   Amb lletra gran o molt gran no hi cap al costat i passa a sota, a tota l'amplada (també sempre igual). */
+.dosi-med { flex-wrap: nowrap; }
+.dosi-med .dosi-text { flex: 1 1 5rem; }
+.dosi-med .dosi-botons { flex: 0 0 auto; }
+.boto-estat { width: 7.5rem; min-width: 7.5rem; flex: 0 0 7.5rem !important; padding-left: 0.4rem; padding-right: 0.4rem; }
+html[data-mida="gran"] .dosi-med, html[data-mida="molt-gran"] .dosi-med,
+html[data-mida="gran"] .dosi-med .dosi-botons, html[data-mida="molt-gran"] .dosi-med .dosi-botons { flex-wrap: wrap; }
+html[data-mida="gran"] .dosi-med .dosi-botons, html[data-mida="molt-gran"] .dosi-med .dosi-botons { flex: 1 1 100%; }
+html[data-mida="gran"] .boto-estat, html[data-mida="molt-gran"] .boto-estat { width: 100%; flex: 1 1 100% !important; }
+@media (max-width: 21rem) {
+  .dosi-med { flex-wrap: wrap; } .dosi-med .dosi-botons { flex: 1 1 100%; } .boto-estat { width: 100%; flex: 1 1 100% !important; }
+}

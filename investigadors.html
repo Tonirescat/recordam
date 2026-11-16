@@ -35,12 +35,12 @@
 
     <section class="bloc" aria-labelledby="t-reinici">
       <h2 id="t-reinici">2. Reiniciar abans de cada participant</h2>
-      <p>Esborra totes les dades i torna l'idioma al català i la lletra a mida normal.</p>
+      <p>Esborra totes les dades i torna l'idioma al català, la lletra a mida normal i el mode clar.</p>
       <div class="fila-botons">
         <button type="button" class="boto boto-perill" id="reiniciar-buit">Deixar-ho buit</button>
         <button type="button" class="boto boto-principal" id="reiniciar-proves">Carregar l'estat inicial de proves</button>
       </div>
-      <p class="ajuda" style="margin-top:0.75rem">Estat inicial de proves: Vitamina D (cada dia, 9:00), Calci (dl, dc, dv, 13:00 i 20:00), una cita d'aquí a 2 dies, una caminada setmanal que comença demà i un dinar d'aquí a 3 dies.</p>
+      <p class="ajuda" style="margin-top:0.75rem">Estat inicial de proves: Vitamina D (cada dia, al matí), Calci (dilluns, dimecres i divendres, al migdia i a la nit), un exercici setmanal (caminar pel parc, a la tarda), una cita demà a les 10:30 (i una altra d'aquí a 14 dies) i un dinar demà a les 14:00 a l'agenda.</p>
     </section>
 
     <section class="bloc" aria-labelledby="t-demo">
@@ -80,7 +80,7 @@
   <script src="js/pwa.js"></script>
   <script>
     'use strict';
-    const NOMS_CAT = { med: 'Medicació', cites: 'Cita', act: 'Activitat', agenda: 'Agenda' };
+    const NOMS_CAT = { med: 'Medicació', cites: 'Cita', act: 'Exercici', agenda: 'Agenda' };
 
     function escriure(text, tipus) {
       document.getElementById('resultat').innerHTML =
@@ -96,7 +96,7 @@
         ['Densitat de píxels', String(window.devicePixelRatio)],
         ['Navegador', navigator.userAgent],
         ['Guardar dades', emmagatzematgeDisponible ? 'Funciona' : 'NO funciona (navegació privada?)'],
-        ['Registres', d.medicaments.length + ' medicaments, ' + d.cites.length + ' cites, ' + d.activitats.length + ' activitats, ' + d.agenda.length + ' a l\'agenda'],
+        ['Registres', d.medicaments.length + ' medicaments, ' + d.cites.length + ' cites, ' + d.activitats.length + ' exercicis, ' + d.agenda.length + ' a l\'agenda'],
         ['Idioma i lletra', d.ajustos.idioma + ' · ' + d.ajustos.mida],
       ];
       const dl = document.getElementById('estat');
@@ -118,7 +118,7 @@
       propers.forEach(function (o) {
         const op = document.createElement('option');
         op.value = o.clau;
-        op.textContent = NOMS_CAT[o.cat] + ' · ' + o.titol + ' · ' + o.data + ' ' + o.hora;
+        op.textContent = NOMS_CAT[o.cat] + ' · ' + o.titol + ' · ' + o.data + ' ' + (o.moment ? o.moment : o.hora);
         sel.append(op);
       });
       sel.append(ex);

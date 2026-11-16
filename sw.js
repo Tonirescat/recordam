@@ -9,7 +9,7 @@
 //
 // IMPORTANT: quan canvieu l'estructura de fitxers, pugeu el número de VERSIO.
 
-const VERSIO = 'v8';
+const VERSIO = 'v18';
 const CACHE = 'recordam-' + VERSIO;
 const FITXERS = [
   './',

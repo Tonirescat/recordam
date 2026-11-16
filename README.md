@@ -10,12 +10,12 @@ Utilitzeu només dades fictícies.
 
 | Fitxer | Què fa |
 | --- | --- |
-| `index.html` | L'aplicació (Inici, Medicació, Cites mèdiques, Activitat física, Agenda, Properes tasques) |
+| `index.html` | L'aplicació (Inici, Medicació, Cites mèdiques, Exercicis, Agenda, Properes tasques) |
 | `investigadors.html` | Pàgina per als investigadors: reiniciar dades i mostrar avisos de prova. No té cap enllaç des de l'aplicació |
 | `css/estils.css` | Colors, mides i adaptació a pantalles |
 | `js/textos.js` | Tots els textos en català i castellà |
 | `js/dades.js` | Guardar i llegir les dades (localStorage) i estat inicial de proves |
-| `js/recordatoris.js` | Càlcul de les dates dels recordatoris |
+| `js/recordatoris.js` | Càlcul de quan toca cada cosa i quan s'avisa (moments del dia, freqüències, cites i agenda) |
 | `js/app.js` | Pantalles, formularis, navegació i avisos |
 | `manifest.webmanifest` | Nom, colors i icones de l'aplicació instal·lada (PWA) |
 | `sw.js` | Service worker: desa una còpia dels fitxers perquè s'obri també sense connexió |
@@ -74,27 +74,52 @@ A `investigadors.html`, apartat 3: trieu un recordatori, trieu «Ara mateix», �
 
 A **Ajustos** hi ha l'apartat **Aspecte de la pantalla** amb dues opcions: **Mode clar** (per defecte) i **Mode fosc**. El canvi es veu a l'instant, no mou la pantalla i es recorda a cada dispositiu. Tots els parells de colors del mode fosc compleixen un contrast mínim de 4,5:1 (comprovat per a tots els textos de les pantalles i finestres). Els colors són variables de `css/estils.css` (`:root` per al clar i `html[data-tema="fosc"]` per al fosc), i l'ajust es desa a `ajustos.tema` (`'clar'` o `'fosc'`). La pàgina d'investigadors no canvia de tema.
 
+## Les quatre seccions (versió 9)
+
+Les seccions no tenen text d'ajuda ni encapçalaments «de farciment»: s'entra i es veu directament el que toca.
+
+**Medicació i Exercicis** (van per **moments del dia**)
+- La pantalla mostra sempre els tres moments d'avui: **Matí**, **Migdia** (als exercicis, **Tarda**) i **Nit**. Si en un moment no toca res, hi surt «No toca prendre res» (o «No toca fer cap exercici»).
+- Cada medicament o exercici té dos botons: **Fet** (verd suau, marca la presa o l'exercici i es pot desfer amb **Desfer**) i **Treure** (gris; treu aquella vegada de la llista, amb confirmació, sense esborrar res). Els botons són més discrets que el nom i la dosi, que són el que es veu primer.
+- **Franja vermella** «Ha passat l'hora!» quan el moment ja ha passat i no s'ha marcat com a fet: matí a partir de les 13:00, migdia/tarda a partir de les 17:00 i nit a partir de les 23:00. Pampalluga suaument (no pampalluga si el dispositiu demana reduir el moviment).
+- Sota hi ha dos botons: **Afegir medicament / exercici** i **Els meus medicaments / exercicis** (la llista sencera, amb Canviar i Esborrar).
+- Si encara no hi ha res, es veu només un missatge al centre i el botó d'afegir.
+
+**Cites mèdiques i Agenda**
+- **Cites:** «La propera cita és:» amb una targeta compacta (hora, motiu, dia i què cal portar) i els botons **Fet** i **Treure**. **Fet** demana confirmació i, en confirmar-ho, la cita **desapareix de tot arreu** (s'esborra; també de la pantalla d'inici i de «Les meves cites»). **Treure** només la treu de «La propera cita» sense esborrar-la. A la pantalla d'inici, les cites només tenen el botó **Fet**. **Agenda:** «El proper esdeveniment és:» amb una targeta gran: el dia, l'hora, el nom i les notes. Sota, els botons **Afegir** i **Les meves cites / La meva agenda** (la llista sencera, amb les passades a part).
+- Si encara no hi ha res, es veu només un missatge al centre i el botó d'afegir.
+
+## Formularis
+
+- **Medicació i Exercicis:** nom (i dosi o durada), **quan** (Matí, Migdia/Tarda, Nit: es pot triar un, dos o els tres) i **quins dies**: *Cada dia*, *Cada setmana*, *Cada mes* o *Només alguns dies* (a Medicació també *Cada 2 setmanes* i *Cada 3 setmanes*: es compta des del primer dia triat a partir d'avui). Per a «Cada setmana» i «Cada mes» només cal confirmar una dada, que ja ve triada amb el dia d'avui (el dia de la setmana, o el número del dia del mes; si el mes és més curt, es compta l'últim dia). No hi ha data d'inici ni de final.
+- **Cites:** motiu, data, hora i «Què haig de portar?» (opcional). Ja no hi ha camp de lloc. **Agenda:** què, data, hora, notes i si es repeteix (un cop, cada dia, cada setmana, cada mes o alguns dies; el dia de la setmana o del mes surt de la data triada).
+- **Barra fixa a baix** a tots els formularis (afegir i canviar): **Desar** (blau) a l'esquerra i **Cancel·lar** (vermell) a la dreta, a tots els formularis. Sempre es veuen, encara que la pantalla s'hagi de desplaçar.
+- Quan una medicació o un exercici es canvia de moments o de freqüència, es compta des d'aquell moment (no apareixen moments d'avui que ja han passat).
+
+## Avisos (automàtics)
+
+Ja no hi ha botó ni casella d'avís: cada cosa avisa automàticament, sempre amb l'aplicació oberta.
+
+| Què | Quan avisa |
+| --- | --- |
+| Medicació i exercicis | A l'hora del seu moment: matí 9:00, migdia/tarda 14:00, nit 21:00 |
+| Cites | 1 dia abans, a la mateixa hora |
+| Agenda | 1 hora abans |
+
+Els avisos de medicació i exercicis tenen el botó **Fet**; els de cites i agenda, només **D'acord**. Les hores d'avís i de «ha passat l'hora» són a `MOMENTS` (`js/recordatoris.js`).
+
 ## Properes tasques (pantalla d'inici)
 
-- **Capçalera de l'inici:** salutació segons l'hora (**Bon dia** de 6:00 a 13:59, **Bona tarda** de 14:00 a 20:59, **Bona nit** de 21:00 a 5:59), la data a l'esquerra i l'hora actual a la dreta, a la mateixa línia (al mòbil s'abrevia la data, «Dilluns, 9 de novembre», i s'amaga el text «Hora actual:» perquè hi càpiguen). L'hora i la salutació s'actualitzen soles.
-- **«Properes tasques»** mostra només el que cau en els **3 propers dies** (avui, demà i demà passat) i té l'avís activat. El botó **Veure la setmana** obre la llista de 7 dies (des d'allà també es pot tornar als 3 dies).
-- Les tasques són targetes **compactes**: l'hora a l'esquerra (columna d'amplada fixa, perquè tots els títols quedin alineats), el títol, la categoria i el dia (Avui, Demà o «dimecres 11»). La distribució s'adapta a l'amplada de la targeta: al **mòbil** els botons ocupen una fila a sota, repartits a parts iguals; a **tauleta o ordinador** (targeta ampla) passen a la dreta, centrats en vertical i tots de la mateixa amplada. Amb la lletra molt gran, sempre es fa servir la distribució de mòbil.
-- **Cada tasca** de la llista (d'avui, de demà i de demà passat) té el botó **Fet** i el botó **Treure**. Quan s'afegeix un recordatori amb avís i cau en aquests 3 dies, hi surt amb tots dos. «Fet» sempre demana confirmació («Ja ho has fet?») i es pot desfer amb **Desfer**.
-- **Avís vermell:** només surt quan ja ha arribat l'hora (o ha passat) i la tasca no està feta: una franja petita amb «Ha passat l'hora!» i la targeta es posa en vermell clar. Pampalluga suaument; si el dispositiu té activada la preferència de «reduir moviment», no pampalluga però es veu igual. Els lectors de pantalla ho anuncien quan passa. Abans de l'hora no surt cap avís.
-- Quan es marca com a feta, l'avís desapareix i la targeta es posa en verd.
-- Les tasques fetes es queden a la llista, en verd, i es poden desfer.
-- Les tasques d'abans d'avui ja no hi surten.
+- **Capçalera de l'inici:** salutació segons l'hora (**Bon dia** de 6:00 a 13:59, **Bona tarda** de 14:00 a 20:59, **Bona nit** de 21:00 a 5:59), la data a l'esquerra i l'hora actual a la dreta, a la mateixa línia (al mòbil s'abrevia la data i s'amaga el text «Hora actual:» perquè hi càpiguen). L'hora i la salutació s'actualitzen soles.
+- **«Properes tasques»** mostra només **cites mèdiques i entrades de l'agenda d'avui i de demà**. El botó **Veure la setmana** obre la llista de 7 dies (des d'allà es pot tornar a avui i demà). La medicació i els exercicis no hi surten: tenen la seva pantalla.
+- Les tasques són targetes **compactes**: l'hora a l'esquerra, el títol, la categoria i el dia (Avui o Demà). La distribució s'adapta a l'amplada: al mòbil els botons van a sota; a tauleta o ordinador, a la dreta.
+- **Fet** demana confirmació («Ja ho has fet?») i es pot desfer amb **Desfer**. Les tasques fetes es queden a la llista, en verd.
+- **Avís vermell** «Ha passat l'hora!»: només surt quan ja ha arribat l'hora i la tasca no està feta. Els lectors de pantalla ho anuncien.
+- **Treure** (✕) demana confirmació, **no esborra res** i treu només aquella vegada de la llista; no surt cap missatge a dalt (només s'anuncia als lectors de pantalla). Es desa a `descartats` i s'esborra sol al cap de dos dies.
 
-## Treure un recordatori
+## Dades guardades (versió 2)
 
-A cada targeta de «Properes tasques» (pantalla d'inici i llista de 7 dies) hi ha el botó **✕ Treure**. Sempre demana confirmació i **no esborra res**: el medicament, la cita o la tasca continuen guardats al seu apartat.
-
-- En treure una tasca **no surt cap missatge a dalt**: la targeta simplement desapareix de la llista (els lectors de pantalla sí que en reben l'avís parlat).
-- Si el recordatori no es repeteix (per exemple, una cita), es treu l'avís.
-- Si es repeteix (medicació, o activitats i agenda repetides), la persona tria entre **Només aquesta vegada** o **Treure tots els avisos**.
-- Per tornar a activar els avisos d'alguna cosa: apartat corresponent → **Canviar** → casella de l'avís.
-- «Només aquesta vegada» es desa a `descartats` (dades.js) i s'esborra sol al cap de dos dies.
-- Les tasques fetes es desen a `preses` (dades.js), amb la mateixa clau de cada ocurrència, tant per a medicació com per a la resta.
+Les dades es guarden a `localStorage` (clau `recordam.v1`) amb `versio: 2`. Les dades de la versió anterior (medicació amb hores i dates, activitats amb data i hora, avisos configurables) **es converteixen soles** la primera vegada que s'obre aquesta versió: les hores passen al moment del dia més proper (abans de les 12:00 matí, de 12:00 a 17:59 migdia, de 18:00 en endavant nit), es treuen les dates de final i els avisos configurables, i les preses ja marcades es conserven. Un exercici d'una sola vegada (que ja no es pot crear) es converteix en una freqüència de «Només alguns dies» amb el dia de la setmana d'aquella data.
 
 ## Canviar textos
 

@@ -2,8 +2,9 @@
 //
 // Com funciona la navegació: l'adreça acaba en #... i cada valor mostra una pantalla.
 //   #inici                      Inici
-//   #recordatoris               Propers recordatoris (#recordatoris-7: 7 dies)
+//   #recordatoris               Properes tasques d'avui i demà (#recordatoris-7: 7 dies)
 //   #medicacio                  Secció (també: cites, activitat, agenda)
+//   #medicacio-llista           Tota la llista («Els meus medicaments»)
 //   #medicacio-nou              Formulari per afegir
 //   #medicacio-editar-ID        Formulari per canviar
 // Només s'utilitzen lletres, xifres i guions: així funciona a qualsevol servidor i visor.
@@ -44,6 +45,8 @@ const ICONES = {
   cita: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M12 12.5v6M9 15.5h6"/>',
   caminar: '<circle cx="13.5" cy="4" r="2"/><path d="M9 21l2.5-6.5 3 3V21M11.5 14.5 12.5 9l3.5 2.5 3 .5M12.5 9l-3.5 1.5L7.5 14"/>',
   llibreta: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7.5h6M9 11.5h6M9 15.5h4"/>',
+  alba: '<path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 6v3.5M4.6 11.6l2 2M19.4 11.6l-2 2"/>',
+  llista: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
   sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
   lluna: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
   campana: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.8 1.5H4.2z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
@@ -91,14 +94,16 @@ function horaCurta(h) { return h ? String(Number(h.slice(0, 2))) + ':' + h.slice
 
 function quanText(dataIso, hora) { return t('a_les', { dia: diaRelatiu(dataIso), hora: horaCurta(hora) }); }
 
+// «avui al matí», «demà a la nit»... (medicació i exercicis) o «avui a les 10:30» (cites i agenda)
+function nomMoment(cat, m) { return t('moment_' + (m === 'migdia' && cat === 'act' ? 'tarda' : m)); }
+function quanOcurrencia(o) {
+  if (o.moment) return t('quan_' + (o.moment === 'migdia' && o.cat === 'act' ? 'tarda' : o.moment), { dia: diaRelatiu(o.data) });
+  return quanText(o.data, o.hora);
+}
+
 function llistaAmbI(elements) {
   if (elements.length <= 1) return elements.join('');
   return elements.slice(0, -1).join(', ') + ' ' + CALENDARI[idioma()].i + ' ' + elements[elements.length - 1];
-}
-
-function textAntelacio(cat, minuts) {
-  if (cat === 'med') return t('ant_0_med');
-  return t('ant_' + minuts);
 }
 
 const DURADES = [15, 30, 45, 60, 90];
@@ -149,31 +154,39 @@ function anar(desti, missatge) {
 
 window.addEventListener('hashchange', function () { render(); });
 
+let temporitzadorMissatge = null;
+
 function render() {
   const r = ruta();
   const cat = catDeRuta(r.vista);
   let html = '';
   let titol = '';
 
-  if (r.vista === 'recordatoris') { html = vistaRecordatoris(r.accio === '7' ? 7 : 3); titol = t('propers'); }
+  if (r.vista === 'recordatoris') { html = vistaRecordatoris(r.accio === '7' ? 7 : 2); titol = t('propers'); }
   else if (cat && (r.accio === 'nou' || r.accio === 'editar')) {
     const res = vistaFormulari(cat, r.accio === 'editar' ? r.id : '');
     html = res.html; titol = res.titol;
   }
+  else if (cat && r.accio === 'llista') { html = vistaLlista(cat); titol = t('llista_' + cat); }
   else if (cat) { html = vistaSeccio(cat); titol = t(CATEGORIES[cat].nom); }
   else { html = vistaInici(); titol = t('inici'); }
 
   let missatge = '';
   if (missatgeSeguent) {
     const m = missatgeSeguent;
+    // El missatge verd (s'ha desat, s'ha esborrat...) no té botó i desapareix sol als 2 segons.
+    // Els errors sí que es queden fins que la persona els tanca.
     missatge = '<div class="missatge ' + (m.tipus === 'error' ? 'missatge-error' : 'missatge-ok') + '" id="missatge">' +
       icona(m.tipus === 'error' ? 'alerta' : 'check') + '<div class="text">' + esc(m.text) + '</div>' +
-      '<button type="button" class="boto boto-secundari" data-accio="tancar-missatge">' + esc(t('tancar')) + '</button></div>';
+      (m.tipus === 'error' ? '<button type="button" class="boto boto-secundari" data-accio="tancar-missatge">' + esc(t('tancar')) + '</button>' : '') + '</div>';
     anunciar(m.text);
     missatgeSeguent = null;
+    clearTimeout(temporitzadorMissatge);
+    if (m.tipus !== 'error') temporitzadorMissatge = setTimeout(function () { const el = document.getElementById('missatge'); if (el) el.remove(); }, 2000);
   }
 
   main.innerHTML = missatge + html;
+  firmaMostrada = firmaPantalla();
   document.title = titol + " · Recorda'm";
   actualitzarCapcalera(r.vista === 'inici' || (!cat && r.vista !== 'recordatoris'));
   prepararFormulari();
@@ -228,13 +241,31 @@ function textDataAvui() {
 }
 function horaAra(ara) { return horaCurta(dosXifres(ara.getHours()) + ':' + dosXifres(ara.getMinutes())); }
 
-// «Firma» de la llista de tasques: canvia quan una tasca es fa, s'esborra o li passa l'hora.
+// «Firma» del que es veu a la pantalla: canvia quan una cosa es fa, s'esborra o li passa l'hora.
 // Serveix per saber si cal redibuixar la pantalla sense que la persona hagi fet res.
 let firmaMostrada = '';
-function firmaTasques(dies) {
+
+// Les ocurrències que es veuen ara a la pantalla (properes tasques, o els moments d'avui de medicació/exercicis).
+function ocurrenciesVisibles(ara) {
+  const r = ruta();
+  const cat = catDeRuta(r.vista);
+  if (r.vista === 'recordatoris') return tasquesProperes(dades, ara, r.accio === '7' ? 7 : 2);
+  if (!cat) return tasquesProperes(dades, ara, 2);
+  if (!r.accio && CATEGORIES[cat].moments) return ocurrenciesDelDia(dades, cat, avuiISO());
+  return [];
+}
+
+function firmaPantalla() {
   const ara = new Date();
-  return avuiISO() + '#' + tasquesProperes(dades, ara, dies).map(function (o) {
-    return o.clau + (dades.preses[o.clau] ? ':F' : (o.quan <= ara ? ':V' : ':-'));
+  const r = ruta();
+  const cat = catDeRuta(r.vista);
+  let propera = '';
+  if (cat && !CATEGORIES[cat].moments && r.accio !== 'nou' && r.accio !== 'editar') {
+    const p = properaDeCategoria(dades, cat, ara);
+    propera = p ? p.clau + (dades.preses[p.clau] ? ':F' : '') : '-';
+  }
+  return avuiISO() + '#' + propera + '#' + ocurrenciesVisibles(ara).map(function (o) {
+    return o.clau + (dades.preses[o.clau] ? ':F' : (o.venc <= ara ? ':V' : ':-'));
   }).join(',');
 }
 
@@ -249,8 +280,7 @@ function vistaInici() {
   }).join('');
 
   const ara = new Date();
-  const propers = tasquesProperes(dades, ara, 3);
-  firmaMostrada = firmaTasques(3);
+  const propers = tasquesProperes(dades, ara, 2);
   const llista = propers.length
     ? '<ul class="llista llista-tasques">' + propers.map(function (o) { return elementRecordatori(o, false); }).join('') + '</ul>'
     : '<p class="buit">' + esc(t('cap_recordatori')) + '</p>';
@@ -264,54 +294,28 @@ function vistaInici() {
     '<ul class="graella-cat">' + cats + '</ul>' +
     '<section aria-labelledby="titol-propers"><h2 id="titol-propers" class="titol-seccio">' + icona('campana') + esc(t('propers')) + '</h2>' +
     llista +
-    '<div class="fila-botons"><a class="boto boto-secundari boto-ample" href="#recordatoris-7">' + esc(t('veure_tots')) + icona('fletxa') + '</a></div>' +
     '</section>';
 }
 
-// ================= Propers recordatoris =================
+// ================= Properes tasques =================
 
 function etiquetaCat(cat) {
   return '<span class="etiqueta-cat">' + icona(CATEGORIES[cat].icona) + esc(t(CATEGORIES[cat].nom)) + '</span>';
 }
 
-function liniaAvis(cat, r) {
-  if (!r.avis) return '<p class="linia linia-avis">' + icona('campana_no') + esc(t('sense_avis')) + '</p>';
-  return '<p class="linia linia-avis">' + icona('campana') + esc(t('avis_x', { x: textAntelacio(cat, r.antelacio) })) + '</p>';
-}
-
 function detallOcurrencia(o) {
   const r = o.registre;
   if (o.cat === 'med') return t('dosi_x', { x: r.dosi });
-  if (o.cat === 'cites') return t('lloc_x', { x: r.lloc });
+  if (o.cat === 'cites') return r.obs || '';
   if (o.cat === 'act') return t('durada_x', { x: textDurada(r.durada) });
   return r.notes || '';
 }
 
-function botoPresa(o) {
-  const feta = !!dades.preses[o.clau];
-  return '<button type="button" class="boto ' + (feta ? 'boto-secundari' : 'boto-principal') + '" data-accio="presa" data-clau="' + esc(o.clau) + '">' +
-    icona(feta ? 'desfer' : 'check') + esc(feta ? t('desfer') : t('ja_presa')) + '</button>';
-}
-
-function estatPresa(o) {
-  const feta = !!dades.preses[o.clau];
-  return feta
-    ? '<span class="estat estat-feta">' + icona('check') + esc(t('feta')) + '</span>'
-    : '<span class="estat estat-pendent">' + icona('rellotge') + esc(t('pendent')) + '</span>';
-}
-
-// Botó «x Treure» de cada recordatori. Només treu l'avís: no esborra el medicament, la cita ni la tasca.
+// Botó «x Treure». Només treu aquesta vegada de la llista: no esborra el medicament, la cita ni la tasca.
 function botoTreure(o) {
   return '<button type="button" class="boto boto-treure boto-compacte" data-accio="treure-avis" data-clau="' + esc(o.clau) + '" aria-label="' +
-    esc(t('treure_aria', { nom: o.titol, quan: quanText(o.data, o.hora) })) + '">' +
+    esc(t('treure_aria', { nom: o.titol, quan: quanOcurrencia(o) })) + '">' +
     icona('creu') + '<span>' + esc(t('treure')) + '</span></button>';
-}
-
-// Un recordatori «es repeteix» si el registre té més d'una ocurrència (medicació, o activitat/agenda repetides).
-function esRepetit(o) {
-  if (o.cat === 'med') return true;
-  if (o.cat === 'cites') return false;
-  return !!o.registre.rep && o.registre.rep !== 'un';
 }
 
 // «Avui», «Demà» o «Dimecres 11» (curt, perquè la targeta no creixi).
@@ -321,34 +325,36 @@ function diaCurt(iso) {
   return nomDia(iso) + ' ' + Number(iso.slice(8, 10));
 }
 
-// Una tasca de la llista «Properes tasques»: targeta compacta amb l'hora a l'esquerra.
+// Una tasca de la llista «Properes tasques» (cites i agenda): targeta compacta amb l'hora a l'esquerra.
 // L'avís vermell només surt quan ja ha passat l'hora i la tasca no està feta.
 // «complet» afegeix el detall i el botó de canviar (llista de 7 dies).
-function elementRecordatori(o, complet) {
+function elementRecordatori(o, complet, propera) {
   const ara = new Date();
   const feta = !!dades.preses[o.clau];
-  const vencuda = !feta && o.quan <= ara;
+  const vencuda = !feta && o.venc <= ara;
   const detall = detallOcurrencia(o);
   const clauAttr = esc(o.clau);
   const classes = 'targeta tasca cat-' + o.cat + (feta ? ' tasca-feta' : '') + (vencuda ? ' tasca-vencuda' : '') + (complet ? ' tasca-complet' : '');
 
-  let meta = etiquetaCat(o.cat);
-  if (!complet) meta += '<span class="tasca-dia">' + esc(diaCurt(o.data)) + '</span>';
+  let meta = propera ? '' : etiquetaCat(o.cat);
+  // Les cites mostren sempre el dia complet («Demà, dimarts 17 de novembre») i què cal portar, també a la pantalla d'inici.
+  if (propera || (o.cat === 'cites' && !complet)) meta += '<span class="tasca-dia">' + esc(diaRelatiu(o.data, true) + (o.data === avuiISO() || o.data === sumarDies(avuiISO(), 1) ? ', ' + nomDia(o.data) + ' ' + dataLlarga(o.data) : '')) + '</span>';
+  else if (!complet) meta += '<span class="tasca-dia">' + esc(diaCurt(o.data)) + '</span>';
   if (feta) meta += '<span class="estat estat-feta">' + icona('check') + esc(t('fet_estat')) + '</span>';
-  if (!feta && o.quan <= ara) meta += '<span class="alerta-vencuda">' + icona('alerta') + '<span>' + esc(t('vencuda')) + '</span></span>';
+  if (vencuda) meta += '<span class="alerta-vencuda">' + icona('alerta') + '<span>' + esc(t('vencuda')) + '</span></span>';
 
   let html = '<li class="' + classes + '">' +
     '<div class="tasca-hora">' + esc(horaCurta(o.hora)) + '</div>' +
     '<div class="tasca-cos">' +
       '<h3 class="tasca-titol">' + esc(o.titol) + '</h3>' +
       '<div class="tasca-meta">' + meta + '</div>';
-  if (complet && detall) html += '<p class="tasca-detall">' + esc(detall) + '</p>';
+  if ((propera || complet || o.cat === 'cites') && detall) html += '<p class="tasca-detall">' + esc(detall) + '</p>';
 
   html += '</div><div class="tasca-botons">' +
     (feta
       ? '<button type="button" class="boto boto-secundari boto-compacte" data-accio="desfer-fet" data-clau="' + clauAttr + '">' + icona('desfer') + esc(t('desfer')) + '</button>'
       : '<button type="button" class="boto boto-principal boto-compacte" data-accio="fet" data-clau="' + clauAttr + '">' + icona('check') + esc(t('fet_boto')) + '</button>') +
-    botoTreure(o);
+    (o.cat === 'cites' && !propera ? '' : botoTreure(o)); // les cites de la pantalla d'inici només tenen «Fet»
   if (complet) {
     html += '<a class="boto boto-secundari boto-compacte" href="#' + CATEGORIES[o.cat].ruta + '-editar-' + encodeURIComponent(o.id) + '">' + icona('llapis') + esc(t('canviar')) + '</a>';
   }
@@ -358,11 +364,10 @@ function elementRecordatori(o, complet) {
 
 function vistaRecordatoris(dies) {
   const llista = tasquesProperes(dades, new Date(), dies);
-  firmaMostrada = firmaTasques(dies);
-  const canvi = dies === 3
+  const canvi = dies === 2
     ? '<a class="boto boto-secundari boto-ample" href="#recordatoris-7">' + esc(t('veure_7')) + icona('fletxa') + '</a>'
     : '<a class="boto boto-secundari boto-ample" href="#recordatoris">' + esc(t('veure_3')) + '</a>';
-  let html = '<h1 class="titol-seccio">' + icona('campana') + esc(t('propers')) + '</h1><p class="ajuda">' + esc(t('ajuda_recordatoris', { n: dies })) + '</p>';
+  let html = '<h1 class="titol-seccio">' + icona('campana') + esc(t('propers')) + '</h1>';
   if (!llista.length) return html + '<p class="buit">' + esc(t('recordatoris_buit', { n: dies })) + '</p><div class="fila-botons">' + canvi + '</div>';
   let diaActual = '';
   llista.forEach(function (o) {
@@ -379,10 +384,128 @@ function vistaRecordatoris(dies) {
 // ================= Seccions =================
 
 function capSeccio(cat) {
-  return '<h1 class="titol-seccio cat-' + cat + '"><span class="cercle">' + icona(CATEGORIES[cat].icona) + '</span>' + esc(t(CATEGORIES[cat].nom)) + '</h1>' +
-    '<p class="ajuda">' + esc(t('ajuda_' + cat)) + '</p>' +
-    '<a class="boto boto-principal boto-ample" href="#' + CATEGORIES[cat].ruta + '-nou">' + icona('mes') + esc(t('afegir_' + cat)) + '</a>';
+  return '<h1 class="titol-seccio cat-' + cat + '"><span class="cercle">' + icona(CATEGORIES[cat].icona) + '</span>' + esc(t(CATEGORIES[cat].nom)) + '</h1>';
 }
+
+function botoAfegir(cat, ample) {
+  return '<a class="boto boto-principal' + (ample ? ' boto-ample' : '') + '" href="#' + CATEGORIES[cat].ruta + '-nou">' + icona('mes') + esc(t('afegir_' + cat)) + '</a>';
+}
+
+// Els dos botons de cada secció: afegir i veure la llista sencera.
+function botonsSeccio(cat) {
+  return '<div class="fila-botons fila-dos">' + botoAfegir(cat) +
+    '<a class="boto boto-secundari" href="#' + CATEGORIES[cat].ruta + '-llista">' + icona('llista') + esc(t('llista_' + cat)) + '</a></div>';
+}
+
+// Quan encara no hi ha res apuntat: missatge al mig i botó d'afegir.
+function estatBuit(cat) {
+  return '<div class="estat-buit"><p>' + esc(t('buit_' + cat)) + '</p>' + botoAfegir(cat, true) + '</div>';
+}
+
+function botoTornar(cat) {
+  return '<a class="boto boto-secundari boto-ample" href="#' + CATEGORIES[cat].ruta + '">' + icona('enrere') + esc(t('tornar_a', { x: t(CATEGORIES[cat].nom) })) + '</a>';
+}
+
+function linia(text, negreta) { return text ? '<p class="linia">' + (negreta ? '<strong>' + esc(text) + '</strong>' : esc(text)) + '</p>' : ''; }
+
+function nomsDies(dies) {
+  return llistaAmbI(dies.slice().sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); }).map(function (d) { return CALENDARI[idioma()].dies[d]; }));
+}
+
+// «Cada dia», «Cada dimecres», «El dia 15 de cada mes», «Cada dilluns, dimecres i divendres»
+function textFrequencia(r) {
+  const f = r.freq || r.rep || 'un';
+  const cal = CALENDARI[idioma()];
+  if (f === 'diari') return t('text_cada_dia');
+  if (f === 'setmanal2' || f === 'setmanal3') return t('text_setmanes', { n: f === 'setmanal2' ? 2 : 3, x: cal.dies[r.diaSetmana] });
+  if (f === 'setmanal') return t('text_setmanal', { x: cal.dies[r.diaSetmana != null ? r.diaSetmana : crearData(r.data, '12:00').getDay()] });
+  if (f === 'mensual') return t('text_mensual', { x: r.diaMes != null ? r.diaMes : Number(r.data.slice(8, 10)) });
+  if (f === 'dies') return t('text_dies', { x: nomsDies(r.dies || []) });
+  if (f === 'unic') return t('text_unic', { x: dataLlarga(r.data) });
+  return '';
+}
+
+function majuscula(text) { return text.charAt(0).toUpperCase() + text.slice(1); }
+
+// «Matí i nit», «Matí, migdia i nit»
+function textMoments(cat, r) {
+  return majuscula(llistaAmbI(ORDRE_MOMENTS.filter(function (m) { return (r.moments || []).indexOf(m) > -1; }).map(function (m) { return nomMoment(cat, m).toLowerCase(); })));
+}
+
+// ---------- Medicació i exercicis: el que toca avui, per moments del dia ----------
+
+function filaDosi(o, ara) {
+  const feta = !!dades.preses[o.clau];
+  const vencuda = !feta && o.venc <= ara;
+  const clau = esc(o.clau);
+  const esMed = o.cat === 'med';
+  const detall = esMed ? t('dosi_x', { x: o.registre.dosi }) : t('durada_x', { x: textDurada(o.registre.durada) });
+  let botons;
+  if (esMed) {
+    // Medicació: un sol botó. «Fet» marca la presa; un cop feta, el mateix botó diu «Pendent» i la torna a deixar pendent.
+    // Té sempre la mateixa mida, estigui feta o no.
+    botons = '<button type="button" class="boto boto-compacte boto-estat ' + (feta ? 'boto-secundari' : 'boto-fet') + '" data-accio="presa" data-clau="' + clau + '" aria-label="' +
+      esc(t(feta ? 'pendent_boto' : 'fet_boto') + ': ' + o.titol) + '">' +
+      icona(feta ? 'desfer' : 'check') + esc(t(feta ? 'pendent_boto' : 'fet_boto')) + '</button>';
+  } else {
+    botons = feta
+      ? '<button type="button" class="boto boto-secundari boto-compacte" data-accio="presa" data-clau="' + clau + '">' + icona('desfer') + esc(t('desfer')) + '</button>'
+      : '<button type="button" class="boto boto-fet boto-compacte" data-accio="presa" data-clau="' + clau + '">' + icona('check') + esc(t('fet_boto')) + '</button>' + botoTreure(o);
+  }
+  return '<li class="dosi' + (esMed ? ' dosi-med' : '') + (feta ? ' dosi-feta' : '') + (vencuda ? ' dosi-vencuda' : '') + '">' +
+    '<div class="dosi-text"><h3>' + esc(o.titol) + '</h3><p class="linia">' + esc(detall) + '</p>' +
+      (feta && !esMed ? '<span class="estat estat-feta">' + icona('check') + esc(t('fet_estat')) + '</span>' : '') +
+      (vencuda ? '<span class="alerta-vencuda">' + icona('alerta') + '<span>' + esc(t('vencuda')) + '</span></span>' : '') +
+    '</div><div class="dosi-botons">' + botons + '</div></li>';
+}
+
+function blocMoment(cat, m, ocs, ara) {
+  const id = 'moment-' + cat + '-' + m;
+  return '<section class="moment cat-' + cat + '" aria-labelledby="' + id + '">' +
+    '<h2 id="' + id + '" class="moment-titol">' + icona(MOMENTS[m].icona) + esc(nomMoment(cat, m)) + '</h2>' +
+    (ocs.length
+      ? '<ul class="llista llista-dosis">' + ocs.map(function (o) { return filaDosi(o, ara); }).join('') + '</ul>'
+      : '<p class="moment-buit">' + esc(t(cat === 'med' ? 'res_med' : 'res_act')) + '</p>') +
+    '</section>';
+}
+
+// ---------- Cites i agenda: la propera ----------
+
+function fitxaPropera(o) {
+  const r = o.registre;
+  const relatiu = o.data === avuiISO() || o.data === sumarDies(avuiISO(), 1);
+  let html = '<div class="propera-quan"><span class="propera-dia">' + esc(diaRelatiu(o.data, true)) + '</span>' +
+    '<span class="propera-hora">' + icona('rellotge') + esc(horaCurta(o.hora)) + '</span></div>';
+  if (relatiu) html += '<p class="propera-data">' + esc(majuscula(nomDia(o.data) + ', ' + dataLlarga(o.data))) + '</p>';
+  html += '<h3 class="propera-titol">' + esc(o.titol) + '</h3>';
+  html += linia(r.notes) + linia(textFrequencia(r));
+  return html;
+}
+
+function vistaSeccio(cat) {
+  const ara = new Date();
+  let html = capSeccio(cat);
+  if (!dades[CATEGORIES[cat].col].length) return html + estatBuit(cat);
+
+  if (CATEGORIES[cat].moments) {
+    const ocs = ocurrenciesDelDia(dades, cat, avuiISO());
+    html += '<div class="moments">' + ORDRE_MOMENTS.map(function (m) {
+      return blocMoment(cat, m, ocs.filter(function (o) { return o.moment === m; }), ara);
+    }).join('') + '</div>';
+    return html + botonsSeccio(cat);
+  }
+
+  const p = properaDeCategoria(dades, cat, ara);
+  let targetaPropera = '';
+  if (p && cat === 'cites') targetaPropera = '<ul class="llista llista-tasques">' + elementRecordatori(p, false, true) + '</ul>'; // compacta, amb Fet i Treure
+  else if (p) targetaPropera = '<div class="propera-targeta">' + fitxaPropera(p) + '</div>';
+  html += '<section class="propera cat-' + cat + '"><h2 class="propera-cap">' + esc(t(cat === 'cites' ? 'propera_cita' : 'propera_agenda')) + '</h2>' +
+    (targetaPropera || '<p class="moment-buit">' + esc(t(cat === 'cites' ? 'cap_cita' : 'cap_agenda')) + '</p>') +
+    '</section>';
+  return html + botonsSeccio(cat);
+}
+
+// ---------- Pantalla «Els meus medicaments», «Les meves cites»... ----------
 
 function botonsTargeta(cat, r) {
   return '<div class="fila-botons">' +
@@ -392,99 +515,7 @@ function botonsTargeta(cat, r) {
 }
 
 function targeta(cat, r, extra) {
-  return '<li class="targeta cat-' + cat + (extra && extra.passat ? ' passat' : '') + '"><h3>' + esc(titolDe(cat, r)) + '</h3>' + (extra && extra.linies || '') + liniaAvis(cat, r) + botonsTargeta(cat, r) + '</li>';
-}
-
-function linia(text, negreta) { return text ? '<p class="linia">' + (negreta ? '<strong>' + esc(text) + '</strong>' : esc(text)) + '</p>' : ''; }
-
-function nomsDies(dies) {
-  return llistaAmbI(dies.slice().sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); }).map(function (d) { return CALENDARI[idioma()].dies[d]; }));
-}
-
-function textRepeticio(rep, r) {
-  if (rep === 'diari') return t('es_repeteix_diari');
-  if (rep === 'setmanal') return t('es_repeteix_setmanal');
-  if (rep === 'dies' && r) return t('es_repeteix_dies', { x: nomsDies(r.dies || []) });
-  return '';
-}
-
-function vistaSeccio(cat) {
-  const ara = new Date();
-  let html = capSeccio(cat);
-
-  if (cat === 'med') {
-    const preses = ocurrencies(dades, crearData(avuiISO(), '00:00'), crearData(avuiISO(), '23:59'))
-      .filter(function (o) { return o.cat === 'med'; });
-    html += '<h2>' + esc(t('preses_avui')) + '</h2>';
-    html += preses.length ? '<ul class="llista">' + preses.map(function (o) {
-      return '<li class="targeta cat-med"><div class="presa"><div class="dades-presa"><h3>' + esc(horaCurta(o.hora)) + ' · ' + esc(o.titol) + '</h3>' +
-        '<p class="linia">' + esc(t('dosi_x', { x: o.registre.dosi })) + '</p><p class="linia">' + estatPresa(o) + '</p></div>' + botoPresa(o) + '</div></li>';
-    }).join('') + '</ul>' : '<p class="buit">' + esc(t('cap_presa_avui')) + '</p>';
-
-    html += '<h2>' + esc(t('meus_med')) + '</h2>';
-    if (!dades.medicaments.length) return html + '<p class="buit">' + esc(t('cap_med')) + '</p>';
-    const meds = dades.medicaments.slice().sort(function (a, b) { return a.nom.localeCompare(b.nom); });
-    return html + '<ul class="llista">' + meds.map(function (m) {
-      const dies = m.freq === 'dies'
-        ? t('dies_x', { x: llistaAmbI(m.dies.slice().sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); }).map(function (d) { return CALENDARI[idioma()].dies[d]; })) })
-        : t('cada_dia');
-      const periode = m.fi ? t('des_de_fins', { x: dataLlarga(m.inici), y: dataLlarga(m.fi) }) : t('des_de_x', { x: dataLlarga(m.inici) });
-      const acabat = m.fi && m.fi < avuiISO();
-      return targeta('med', m, {
-        passat: acabat,
-        linies: linia(t('dosi_x', { x: m.dosi })) + linia(t('hores_x', { x: llistaAmbI(m.hores.slice().sort().map(horaCurta)) })) + linia(dies) + linia(periode) + (acabat ? linia(t('finalitzat'), true) : ''),
-      });
-    }).join('') + '</ul>';
-  }
-
-  if (cat === 'cites') {
-    const totes = dades.cites.slice().sort(function (a, b) { return crearData(a.data, a.hora) - crearData(b.data, b.hora); });
-    const futures = totes.filter(function (c) { return crearData(c.data, c.hora) >= ara; });
-    const passades = totes.filter(function (c) { return crearData(c.data, c.hora) < ara; }).reverse();
-    const fitxa = function (c, passat) {
-      return targeta('cites', c, { passat: passat, linies: linia(t('a_les', { dia: diaRelatiu(c.data, true), hora: horaCurta(c.hora) }), true) + linia(t('lloc_x', { x: c.lloc })) + linia(c.obs) });
-    };
-    html += '<h2>' + esc(t('properes_cites')) + '</h2>';
-    html += futures.length ? '<ul class="llista">' + futures.map(function (c) { return fitxa(c, false); }).join('') + '</ul>' : '<p class="buit">' + esc(t('cap_cita')) + '</p>';
-    if (passades.length) html += '<h2>' + esc(t('cites_passades')) + '</h2><ul class="llista">' + passades.map(function (c) { return fitxa(c, true); }).join('') + '</ul>';
-    return html;
-  }
-
-  if (cat === 'act') {
-    const setmana = ocurrencies(dades, ara, crearData(sumarDies(avuiISO(), 6), '23:59')).filter(function (o) { return o.cat === 'act'; });
-    html += '<h2>' + esc(t('aquesta_setmana')) + '</h2>';
-    html += setmana.length ? '<ul class="llista">' + setmana.map(function (o) {
-      return '<li class="targeta cat-act"><h3>' + esc(o.titol) + '</h3>' + linia(t('a_les', { dia: diaRelatiu(o.data, true), hora: horaCurta(o.hora) }), true) + linia(t('durada_x', { x: textDurada(o.registre.durada) })) + '</li>';
-    }).join('') + '</ul>' : '<p class="buit">' + esc(t('cap_act_setmana')) + '</p>';
-    html += '<h2>' + esc(t('meves_act')) + '</h2>';
-    if (!dades.activitats.length) return html + '<p class="buit">' + esc(t('cap_act')) + '</p>';
-    return html + '<ul class="llista">' + ordenarPerPropera('act', dades.activitats).map(function (x) {
-      const r = x.r, p = x.propera;
-      return targeta('act', r, {
-        passat: !p,
-        linies: (p ? linia(t('propera_vegada', { x: quanText(p.data, p.hora) }), true) : linia(t('finalitzat'), true)) +
-          linia(t('durada_x', { x: textDurada(r.durada) })) + linia(textRepeticio(r.rep, r)),
-      });
-    }).join('') + '</ul>';
-  }
-
-  // Agenda
-  html += '<h2>' + esc(t('properes_agenda')) + '</h2>';
-  if (!dades.agenda.length) return html + '<p class="buit">' + esc(t('cap_agenda')) + '</p>';
-  const ordenades = ordenarPerPropera('agenda', dades.agenda);
-  const futures = ordenades.filter(function (x) { return x.propera; });
-  const passades = ordenades.filter(function (x) { return !x.propera; });
-  const fitxa = function (x) {
-    const r = x.r, p = x.propera;
-    return targeta('agenda', r, {
-      passat: !p,
-      linies: (p ? linia(t('a_les', { dia: diaRelatiu(p.data, true), hora: horaCurta(p.hora) }), true) : linia(t('a_les', { dia: diaRelatiu(r.data, true), hora: horaCurta(r.hora) }), true)) +
-        linia(r.notes) + linia(textRepeticio(r.rep, r)),
-    });
-  };
-  html += futures.length ? '<ul class="llista">' + futures.map(fitxa).join('') + '</ul>' : '<p class="buit">' + esc(t('cap_agenda')) + '</p>';
-  if (passades.length) html += '<h2>' + esc(t('agenda_passades')) + '</h2><ul class="llista">' + passades.map(fitxa).join('') + '</ul>';
-  return html;
+  return '<li class="targeta cat-' + cat + (extra && extra.passat ? ' passat' : '') + '"><h3>' + esc(titolDe(cat, r)) + '</h3>' + (extra && extra.linies || '') + botonsTargeta(cat, r) + '</li>';
 }
 
 function ordenarPerPropera(cat, registres) {
@@ -496,6 +527,48 @@ function ordenarPerPropera(cat, registres) {
       if (b.propera) return 1;
       return crearData(b.r.data, b.r.hora) - crearData(a.r.data, a.r.hora);
     });
+}
+
+function vistaLlista(cat) {
+  let html = '<h1 class="titol-seccio cat-' + cat + '"><span class="cercle">' + icona(CATEGORIES[cat].icona) + '</span>' + esc(t('llista_' + cat)) + '</h1>';
+  const registres = dades[CATEGORIES[cat].col];
+  if (!registres.length) return html + estatBuit(cat) + '<div class="fila-botons">' + botoTornar(cat) + '</div>';
+  const peu = '<div class="fila-botons fila-dos">' + botoAfegir(cat) + botoTornar(cat) + '</div>';
+
+  if (cat === 'med' || cat === 'act') {
+    const ordenats = registres.slice().sort(function (a, b) { return a.nom.localeCompare(b.nom); });
+    return html + '<ul class="llista">' + ordenats.map(function (r) {
+      return targeta(cat, r, { linies: linia(cat === 'med' ? t('dosi_x', { x: r.dosi }) : t('durada_x', { x: textDurada(r.durada) })) + linia(textMoments(cat, r)) + linia(textFrequencia(r)) });
+    }).join('') + '</ul>' + peu;
+  }
+
+  if (cat === 'cites') {
+    const ara = new Date();
+    const totes = registres.slice().sort(function (a, b) { return crearData(a.data, a.hora) - crearData(b.data, b.hora); });
+    const futures = totes.filter(function (c) { return crearData(c.data, c.hora) >= ara; });
+    const passades = totes.filter(function (c) { return crearData(c.data, c.hora) < ara; }).reverse();
+    const fitxa = function (c, passat) {
+      return targeta('cites', c, { passat: passat, linies: linia(t('a_les', { dia: diaRelatiu(c.data, true), hora: horaCurta(c.hora) }), true) + linia(c.obs) });
+    };
+    if (futures.length) html += '<h2>' + esc(t('properes_cites')) + '</h2><ul class="llista">' + futures.map(function (c) { return fitxa(c, false); }).join('') + '</ul>';
+    if (passades.length) html += '<h2>' + esc(t('cites_passades')) + '</h2><ul class="llista">' + passades.map(function (c) { return fitxa(c, true); }).join('') + '</ul>';
+    return html + peu;
+  }
+
+  // Agenda
+  const ordenades = ordenarPerPropera('agenda', registres);
+  const futures = ordenades.filter(function (x) { return x.propera; });
+  const passades = ordenades.filter(function (x) { return !x.propera; });
+  const fitxa = function (x) {
+    const r = x.r, p = x.propera;
+    return targeta('agenda', r, {
+      passat: !p,
+      linies: linia(t('a_les', { dia: diaRelatiu(p ? p.data : r.data, true), hora: horaCurta(p ? p.hora : r.hora) }), true) + linia(r.notes) + linia(textFrequencia(r)),
+    });
+  };
+  if (futures.length) html += '<h2>' + esc(t('properes_agenda')) + '</h2><ul class="llista">' + futures.map(fitxa).join('') + '</ul>';
+  if (passades.length) html += '<h2>' + esc(t('agenda_passades')) + '</h2><ul class="llista">' + passades.map(fitxa).join('') + '</ul>';
+  return html + peu;
 }
 
 // ================= Formularis =================
@@ -510,7 +583,7 @@ function campText(nom, etiqueta, valor, opts) {
   const descr = [opts.ajuda ? 'ajuda-' + nom : '', 'error-' + nom].filter(Boolean).join(' ');
   const control = opts.multilinia
     ? '<textarea id="' + nom + '" name="' + nom + '" aria-describedby="' + descr + '">' + esc(valor) + '</textarea>'
-    : '<input type="text" id="' + nom + '" name="' + nom + '" value="' + esc(valor) + '" autocomplete="off" aria-describedby="' + descr + '"' + (opts.oblig ? ' aria-required="true"' : '') + '>';
+    : '<input type="text"' + (opts.numeric ? ' inputmode="numeric" pattern="[0-9]*"' : '') + ' id="' + nom + '" name="' + nom + '" value="' + esc(valor) + '" autocomplete="off" aria-describedby="' + descr + '"' + (opts.oblig ? ' aria-required="true"' : '') + '>';
   return '<div class="camp"><label for="' + nom + '">' + etiquetaCamp(etiqueta, opts.oblig) + '</label>' + ajuda + control + '<div id="error-' + nom + '"></div></div>';
 }
 
@@ -535,21 +608,61 @@ function grupOpcions(nom, llegenda, opcions, valor, oblig, extraClasse) {
     }).join('') + '</div><div id="error-' + nom + '"></div></fieldset>';
 }
 
-function campAvis(cat, r) {
-  const actiu = r.avis !== false;
-  let html = '<div class="camp"><label class="opcio"><input type="checkbox" name="avis" id="avis"' + (actiu ? ' checked' : '') + '>' +
-    '<span>' + icona('campana') + ' ' + esc(cat === 'med' ? t('med_avis') : t('vull_avis')) + '</span></label></div>';
-  if (cat !== 'med') {
-    const opcions = ANTELACIONS[cat].map(function (m) { return { valor: m, text: t('ant_' + m) }; });
-    html += grupOpcions('antelacio', t('quan_avis'), opcions, r.antelacio != null ? r.antelacio : ANTELACIONS[cat][0], true, 'grup-antelacio' + (actiu ? '' : ' amagat'));
-  }
+// Caselles de dies de la setmana (de dilluns a diumenge)
+const ORDRE_DIES = [1, 2, 3, 4, 5, 6, 0];
+function caselaDies(nom, marcats, id, llegenda, amagat, tipus) {
+  return '<fieldset id="' + id + '" class="' + (amagat ? 'amagat' : '') + '" aria-describedby="error-' + nom + '"><legend>' + etiquetaCamp(llegenda, true) + '</legend><div class="opcions">' +
+    ORDRE_DIES.map(function (d) {
+      return '<label class="opcio"><input type="' + tipus + '" name="' + nom + '" value="' + d + '"' + (marcats.indexOf(d) > -1 ? ' checked' : '') + '><span>' + esc(CALENDARI[idioma()].dies[d]) + '</span></label>';
+    }).join('') + '</div><div id="error-' + nom + '"></div></fieldset>';
+}
+
+// Moments del dia: matí, migdia (tarda als exercicis) i nit. Es poden triar un, dos o els tres.
+function campMoments(cat, marcats) {
+  return '<fieldset id="grup-moments" aria-describedby="error-moments"><legend>' + etiquetaCamp(t('moments_' + cat), true) + '</legend>' +
+    '<div class="opcions opcions-moments">' +
+    ORDRE_MOMENTS.map(function (m) {
+      return '<label class="opcio"><input type="checkbox" name="moments" value="' + m + '"' + (marcats.indexOf(m) > -1 ? ' checked' : '') + '><span>' + icona(MOMENTS[m].icona) + esc(nomMoment(cat, m)) + '</span></label>';
+    }).join('') + '</div><div id="error-moments"></div></fieldset>';
+}
+
+// Cada dia | Cada setmana | Cada mes | Només alguns dies.
+// Setmana i mes demanen una sola dada més (el dia), ja triada amb la data d'avui perquè només calgui confirmar-la.
+function campsFrequencia(v, ambSetmanes) {
+  const f = v.freq;
+  const setmanal = f === 'setmanal' || f === 'setmanal2' || f === 'setmanal3';
+  const opcions = [{ valor: 'diari', text: t('freq_diari') }, { valor: 'setmanal', text: t('freq_setmanal') }];
+  if (ambSetmanes) opcions.push({ valor: 'setmanal2', text: t('freq_setmanal2') }, { valor: 'setmanal3', text: t('freq_setmanal3') });
+  opcions.push({ valor: 'mensual', text: t('freq_mensual') }, { valor: 'dies', text: t('freq_dies') });
+  let html = grupOpcions('freq', t('med_freq'), opcions, f, true);
+  html += '<fieldset id="grup-diasetmana" class="' + (setmanal ? '' : 'amagat') + '"><legend>' + etiquetaCamp(t('dia_setmana_q'), true) + '</legend><div class="opcions">' +
+    ORDRE_DIES.map(function (d) {
+      return '<label class="opcio"><input type="radio" name="diasetmana" value="' + d + '"' + (Number(v.diaSetmana) === d ? ' checked' : '') + '><span>' + esc(CALENDARI[idioma()].dies[d]) + '</span></label>';
+    }).join('') + '</div></fieldset>';
+  html += '<div class="camp' + (f === 'mensual' ? '' : ' amagat') + '" id="camp-diames"><label for="diames">' + etiquetaCamp(t('dia_mes_q'), true) + '</label>' +
+    '<input type="text" inputmode="numeric" pattern="[0-9]*" id="diames" name="diames" value="' + esc(v.diaMes) + '" autocomplete="off" aria-describedby="error-diames"><div id="error-diames"></div></div>';
+  html += caselaDies('dies', v.dies || [], 'grup-dies', t('med_dies'), f !== 'dies', 'checkbox');
   return html;
 }
 
-function filaHora(n, valor, potTreure) {
-  return '<div class="fila-hora"><label class="visualment-amagat" for="hora-' + n + '">' + esc(t('med_hora_n', { n: n })) + '</label>' +
-    '<input type="time" id="hora-' + n + '" name="hora" value="' + esc(valor) + '" aria-describedby="error-hores">' +
-    (potTreure ? '<button type="button" class="boto boto-perill-suau" data-accio="treure-hora" aria-label="' + esc(t('treure_hora', { n: n })) + '">' + icona('paperera') + '</button>' : '') + '</div>';
+// Agenda: es repeteix? (el dia de la setmana o del mes surt de la data triada)
+function campsRepeticio(v) {
+  let html = grupOpcions('rep', t('repeticio'), [
+    { valor: 'un', text: t('rep_un') }, { valor: 'diari', text: t('rep_diari') }, { valor: 'setmanal', text: t('rep_setmanal') },
+    { valor: 'mensual', text: t('rep_mensual') }, { valor: 'dies', text: t('rep_dies') },
+  ], v.rep, true);
+  html += caselaDies('repdies', v.dies || [], 'grup-repdies', t('med_dies'), v.rep !== 'dies', 'checkbox');
+  return html;
+}
+
+function valorsPerDefecte(cat) {
+  const avui = avuiISO();
+  const diaSetmana = crearData(avui, '12:00').getDay();
+  const diaMes = Number(avui.slice(8, 10));
+  if (cat === 'med') return { nom: '', dosi: '', moments: [], freq: 'diari', dies: [], diaSetmana: diaSetmana, diaMes: diaMes };
+  if (cat === 'act') return { nom: '', durada: 30, moments: [], freq: 'diari', dies: [], diaSetmana: diaSetmana, diaMes: diaMes };
+  if (cat === 'cites') return { motiu: '', data: '', hora: '', obs: '' };
+  return { nom: '', data: '', hora: '', notes: '', rep: 'un', dies: [] };
 }
 
 function vistaFormulari(cat, id) {
@@ -557,83 +670,50 @@ function vistaFormulari(cat, id) {
   const r = editant ? trobar(cat, id) : null;
   if (editant && !r) {
     missatgeSeguent = { tipus: 'error', text: t('no_trobat') };
-    return { html: vistaSeccio(cat), titol: t(CATEGORIES[cat].nom) };
+    return { html: vistaLlista(cat), titol: t(CATEGORIES[cat].nom) };
   }
-  const v = r || valorsPerDefecte(cat);
+  let v = r || valorsPerDefecte(cat);
+  if (v.freq === 'unic') v = Object.assign({}, v, { freq: 'dies', dies: [crearData(v.data, '12:00').getDay()] }); // exercici d'una sola vegada (dades antigues)
   const titol = t((editant ? 'canviar_' : 'afegir_') + cat);
-  const textDesar = editant ? t('desar_canvis') : t('desar');
+  const textDesar = t('desar');
+  const tornada = '#' + CATEGORIES[cat].ruta + (editant ? '-llista' : '');
 
   let camps = '';
   if (cat === 'med') {
-    const dies = [1, 2, 3, 4, 5, 6, 0];
-    camps += campText('nom', t('med_nom'), v.nom, { oblig: true, ajuda: t('med_nom_ajuda') });
-    camps += campText('dosi', t('med_dosi'), v.dosi, { oblig: true, ajuda: t('med_dosi_ajuda') });
-    camps += '<fieldset id="grup-hores" aria-describedby="error-hores"><legend>' + etiquetaCamp(t('med_hores'), true) + '</legend><div id="llista-hores">' +
-      v.hores.map(function (h, i) { return filaHora(i + 1, h, v.hores.length > 1); }).join('') + '</div>' +
-      '<div id="error-hores"></div>' +
-      '<button type="button" class="boto boto-secundari" data-accio="afegir-hora">' + icona('mes') + esc(t('afegir_hora')) + '</button></fieldset>';
-    camps += grupOpcions('freq', t('med_freq'), [{ valor: 'diari', text: t('freq_diari') }, { valor: 'dies', text: t('freq_dies') }], v.freq, true);
-    camps += '<fieldset id="grup-dies" class="' + (v.freq === 'dies' ? '' : 'amagat') + '" aria-describedby="error-dies"><legend>' + etiquetaCamp(t('med_dies'), true) + '</legend><div class="opcions">' +
-      dies.map(function (d) {
-        return '<label class="opcio"><input type="checkbox" name="dies" value="' + d + '"' + (v.dies.indexOf(d) > -1 ? ' checked' : '') + '><span>' + esc(CALENDARI[idioma()].dies[d]) + '</span></label>';
-      }).join('') + '</div><div id="error-dies"></div></fieldset>';
-    camps += campData('inici', t('med_inici'), v.inici, true);
-    camps += campData('fi', t('med_fi'), v.fi, false, t('med_fi_ajuda'));
-  } else if (cat === 'cites') {
-    camps += campText('motiu', t('cita_motiu'), v.motiu, { oblig: true, ajuda: t('cita_motiu_ajuda') });
-    camps += campData('data', t('data'), v.data, true);
-    camps += campHora('hora', t('hora'), v.hora);
-    camps += campText('lloc', t('cita_lloc'), v.lloc, { oblig: true, ajuda: t('cita_lloc_ajuda') });
-    camps += campText('obs', t('cita_obs'), v.obs, { multilinia: true, ajuda: t('cita_obs_ajuda') });
+    camps += campText('nom', t('med_nom'), v.nom, { oblig: true });
+    camps += campText('dosi', t('med_dosi'), v.dosi, { oblig: true });
+    camps += campMoments('med', v.moments);
+    camps += campsFrequencia(v, true);
   } else if (cat === 'act') {
-    camps += campText('nom', t('act_nom'), v.nom, { oblig: true, ajuda: t('act_nom_ajuda') });
-    camps += campData('data', t('data'), v.data, true);
-    camps += campHora('hora', t('hora'), v.hora);
+    camps += campText('nom', t('act_nom'), v.nom, { oblig: true });
     const altra = DURADES.indexOf(Number(v.durada)) === -1;
     camps += grupOpcions('durada', t('act_durada'), DURADES.map(function (m) { return { valor: m, text: textDurada(m) }; }).concat([{ valor: 'altra', text: t('durada_altra') }]), altra ? 'altra' : v.durada, true);
     camps += '<div class="camp' + (altra ? '' : ' amagat') + '" id="camp-minuts"><label for="minuts">' + etiquetaCamp(t('durada_minuts'), true) + '</label>' +
-      '<p class="ajuda" id="ajuda-minuts">' + esc(t('durada_minuts_ajuda')) + '</p>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" id="minuts" name="minuts" value="' + (altra ? esc(v.durada) : '') + '" autocomplete="off" aria-describedby="ajuda-minuts error-minuts"><div id="error-minuts"></div></div>';
-    camps += campsRepeticio(v);
+      '<input type="text" inputmode="numeric" pattern="[0-9]*" id="minuts" name="minuts" value="' + (altra ? esc(v.durada) : '') + '" autocomplete="off" aria-describedby="error-minuts"><div id="error-minuts"></div></div>';
+    camps += campMoments('act', v.moments);
+    camps += campsFrequencia(v);
+  } else if (cat === 'cites') {
+    camps += campText('motiu', t('cita_motiu'), v.motiu, { oblig: true });
+    camps += campData('data', t('data'), v.data, true);
+    camps += campHora('hora', t('hora'), v.hora);
+    camps += campText('obs', t('cita_obs'), v.obs, { multilinia: true });
   } else {
-    camps += campText('nom', t('agenda_nom'), v.nom, { oblig: true, ajuda: t('agenda_nom_ajuda') });
+    camps += campText('nom', t('agenda_nom'), v.nom, { oblig: true });
     camps += campData('data', t('data'), v.data, true);
     camps += campHora('hora', t('hora'), v.hora);
     camps += campText('notes', t('agenda_notes'), v.notes, { multilinia: true });
     camps += campsRepeticio(v);
   }
-  camps += campAvis(cat, v);
 
+  // Els botons Desar (blau, a l'esquerra) i Cancel·lar (vermell, a la dreta) queden fixos a baix de la pantalla.
+  const botoCancelar = '<a class="boto boto-cancela" href="' + tornada + '">' + icona('creu') + esc(t('cancelar')) + '</a>';
+  const botoDesar = '<button type="submit" class="boto ' + 'boto-principal' + '">' + icona('check') + esc(textDesar) + '</button>';
+  const botonsBarra = botoDesar + botoCancelar;
   const html = '<h1 class="titol-seccio cat-' + cat + '"><span class="cercle">' + icona(CATEGORIES[cat].icona) + '</span>' + esc(titol) + '</h1>' +
-    '<p class="ajuda">' + esc(t('instruccio_form', { desar: textDesar })) + '</p>' +
     '<form id="formulari" novalidate data-cat="' + cat + '" data-id="' + esc(id) + '">' +
     '<div id="resum-errors"></div>' + camps +
-    '<div class="botons-form"><button type="submit" class="boto boto-principal">' + icona('check') + esc(textDesar) + '</button>' +
-    '<a class="boto boto-secundari" href="#' + CATEGORIES[cat].ruta + '">' + esc(t('cancelar')) + '</a></div></form>';
+    '<div class="botons-form"><div class="botons-form-dins">' + botonsBarra + '</div></div></form>';
   return { html: html, titol: titol };
-}
-
-// «Es repeteix?» amb opcions ràpides i una opció lliure: triar els dies de la setmana.
-function campsRepeticio(v) {
-  const dies = [1, 2, 3, 4, 5, 6, 0];
-  const marcats = v.dies || [];
-  let html = grupOpcions('rep', t('repeticio'), [
-    { valor: 'un', text: t('rep_un') }, { valor: 'diari', text: t('rep_diari') }, { valor: 'setmanal', text: t('rep_setmanal') },
-    { valor: 'dies', text: t('rep_dies') },
-  ], v.rep, true);
-  html += '<fieldset id="grup-repdies" class="' + (v.rep === 'dies' ? '' : 'amagat') + '" aria-describedby="error-repdies"><legend>' + etiquetaCamp(t('med_dies'), true) + '</legend><div class="opcions">' +
-    dies.map(function (d) {
-      return '<label class="opcio"><input type="checkbox" name="repdies" value="' + d + '"' + (marcats.indexOf(d) > -1 ? ' checked' : '') + '><span>' + esc(CALENDARI[idioma()].dies[d]) + '</span></label>';
-    }).join('') + '</div><div id="error-repdies"></div></fieldset>';
-  return html;
-}
-
-function valorsPerDefecte(cat) {
-  const avui = avuiISO();
-  if (cat === 'med') return { nom: '', dosi: '', hores: [''], freq: 'diari', dies: [], inici: avui, fi: '', avis: true };
-  if (cat === 'cites') return { motiu: '', data: '', hora: '', lloc: '', obs: '', avis: true, antelacio: ANTELACIONS.cites[0] };
-  if (cat === 'act') return { nom: '', data: '', hora: '', durada: 30, rep: 'un', avis: true, antelacio: ANTELACIONS.act[0] };
-  return { nom: '', data: '', hora: '', notes: '', rep: 'un', avis: true, antelacio: ANTELACIONS.agenda[0] };
 }
 
 // Mostra o amaga parts del formulari segons el que es tria.
@@ -641,47 +721,32 @@ function prepararFormulari() {
   const form = document.getElementById('formulari');
   if (!form) return;
   form.addEventListener('change', function (e) {
-    if (e.target.name === 'freq') document.getElementById('grup-dies').classList.toggle('amagat', e.target.value !== 'dies');
-    if (e.target.name === 'rep') {
-      document.getElementById('grup-repdies').classList.toggle('amagat', e.target.value !== 'dies');
+    if (e.target.name === 'freq') {
+      document.getElementById('grup-diasetmana').classList.toggle('amagat', e.target.value.indexOf('setmanal') !== 0);
+      document.getElementById('camp-diames').classList.toggle('amagat', e.target.value !== 'mensual');
+      document.getElementById('grup-dies').classList.toggle('amagat', e.target.value !== 'dies');
     }
+    if (e.target.name === 'rep') document.getElementById('grup-repdies').classList.toggle('amagat', e.target.value !== 'dies');
     if (e.target.name === 'durada') document.getElementById('camp-minuts').classList.toggle('amagat', e.target.value !== 'altra');
-    if (e.target.name === 'avis') {
-      const g = form.querySelector('.grup-antelacio');
-      if (g) g.classList.toggle('amagat', !e.target.checked);
-    }
-  });
-}
-
-function renumerarHores() {
-  const files = document.querySelectorAll('#llista-hores .fila-hora');
-  files.forEach(function (fila, i) {
-    const n = i + 1;
-    fila.querySelector('label').textContent = t('med_hora_n', { n: n });
-    fila.querySelector('label').setAttribute('for', 'hora-' + n);
-    fila.querySelector('input').id = 'hora-' + n;
-    let boto = fila.querySelector('[data-accio="treure-hora"]');
-    if (files.length > 1 && !boto) {
-      fila.insertAdjacentHTML('beforeend', '<button type="button" class="boto boto-perill-suau" data-accio="treure-hora">' + icona('paperera') + '</button>');
-      boto = fila.querySelector('[data-accio="treure-hora"]');
-    }
-    if (files.length === 1 && boto) { boto.remove(); boto = null; }
-    if (boto) boto.setAttribute('aria-label', t('treure_hora', { n: n }));
   });
 }
 
 function mostrarError(form, nom, text) {
   const zona = form.querySelector('#error-' + nom);
   if (zona) zona.innerHTML = '<p class="error-camp">' + icona('alerta') + '<span>' + esc(text) + '</span></p>';
-  const control = form.querySelector('#' + nom) || form.querySelector('#grup-' + nom + ' input');
-  if (nom === 'hores') form.querySelectorAll('input[name="hora"]').forEach(function (i) { if (!esHoraValida(i.value)) i.setAttribute('aria-invalid', 'true'); });
-  else if (control && control.type !== 'radio' && control.type !== 'checkbox') control.setAttribute('aria-invalid', 'true');
+  const control = form.querySelector('#' + nom);
+  if (control && control.type !== 'radio' && control.type !== 'checkbox') control.setAttribute('aria-invalid', 'true');
 }
 
 function netejarErrors(form) {
   form.querySelectorAll('[id^="error-"]').forEach(function (z) { z.innerHTML = ''; });
   form.querySelectorAll('[aria-invalid]').forEach(function (c) { c.removeAttribute('aria-invalid'); });
   form.querySelector('#resum-errors').innerHTML = '';
+}
+
+function ahoText() {
+  const a = new Date();
+  return dataISO(a) + 'T' + dosXifres(a.getHours()) + ':' + dosXifres(a.getMinutes());
 }
 
 function enviarFormulari(form) {
@@ -694,76 +759,79 @@ function enviarFormulari(form) {
   netejarErrors(form);
 
   let reg;
-  const avis = f.get('avis') === 'on';
-  const antelacio = Number(f.get('antelacio'));
-
-  if (cat === 'med') {
-    const hores = f.getAll('hora').map(String).filter(function (h) { return h; });
-    const dies = f.getAll('dies').map(Number);
-    reg = { nom: val('nom'), dosi: val('dosi'), hores: hores, freq: val('freq') || 'diari', dies: dies, inici: val('inici'), fi: val('fi'), avis: avis };
-    if (!reg.nom) err('nom', 'err_med_nom');
-    if (!reg.dosi) err('dosi', 'err_med_dosi');
-    if (!hores.length || hores.some(function (h) { return !esHoraValida(h); })) err('hores', 'err_hores');
-    if (reg.freq === 'dies' && !dies.length) err('dies', 'err_dies');
-    if (!esDataValida(reg.inici)) err('inici', 'err_data');
-    if (reg.fi && !esDataValida(reg.fi)) err('fi', 'err_data');
-    else if (reg.fi && esDataValida(reg.inici) && reg.fi < reg.inici) err('fi', 'err_fi');
-    reg.hores = Array.from(new Set(hores)).sort();
-    if (reg.freq !== 'dies') reg.dies = [];
-  } else if (cat === 'cites') {
-    reg = { motiu: val('motiu'), data: val('data'), hora: val('hora'), lloc: val('lloc'), obs: val('obs'), avis: avis, antelacio: antelacio };
-    if (!reg.motiu) err('motiu', 'err_cita_motiu');
-    if (!esDataValida(reg.data)) err('data', 'err_data');
-    if (!esHoraValida(reg.hora)) err('hora', 'err_hora');
-    if (!reg.lloc) err('lloc', 'err_cita_lloc');
-  } else {
-    reg = { nom: val('nom'), data: val('data'), hora: val('hora'), rep: val('rep') || 'un', dies: [], avis: avis, antelacio: antelacio };
-    if (!reg.nom) err('nom', cat === 'act' ? 'err_act_nom' : 'err_agenda_nom');
-    if (!esDataValida(reg.data)) err('data', 'err_data');
-    if (!esHoraValida(reg.hora)) err('hora', 'err_hora');
+  if (cat === 'med' || cat === 'act') {
+    const moments = ORDRE_MOMENTS.filter(function (m) { return f.getAll('moments').indexOf(m) > -1; });
+    const freq = val('freq') || 'diari';
+    reg = { nom: val('nom'), moments: moments, freq: freq, dies: [], diaSetmana: Number(f.get('diasetmana')), diaMes: Number(val('diames')) };
+    if (cat === 'med') reg.dosi = val('dosi');
+    if (!reg.nom) err('nom', cat === 'med' ? 'err_med_nom' : 'err_act_nom');
+    if (cat === 'med' && !reg.dosi) err('dosi', 'err_med_dosi');
     if (cat === 'act') {
       if (val('durada') === 'altra') {
         const m = val('minuts');
         if (!/^\d+$/.test(m) || Number(m) < 1 || Number(m) > 720) err('minuts', 'err_minuts');
         else reg.durada = Number(m);
       } else reg.durada = Number(val('durada')) || 30;
-    } else reg.notes = val('notes');
+    }
+    if (!moments.length) err('moments', 'err_moments');
+    if (freq === 'dies') {
+      reg.dies = f.getAll('dies').map(Number);
+      if (!reg.dies.length) err('dies', 'err_dies');
+    }
+    if (freq === 'mensual' && (!/^\d+$/.test(val('diames')) || reg.diaMes < 1 || reg.diaMes > 31)) err('diames', 'err_dia_mes');
+    if (freq !== 'mensual' && !(reg.diaMes >= 1 && reg.diaMes <= 31)) reg.diaMes = Number(avuiISO().slice(8, 10));
+    if (!(reg.diaSetmana >= 0 && reg.diaSetmana <= 6)) reg.diaSetmana = crearData(avuiISO(), '12:00').getDay();
+    // Cada 2 o 3 setmanes: la primera vegada és el primer dia triat a partir d'avui (si no es canvia, es manté).
+    reg.ancora = '';
+    if (freq === 'setmanal2' || freq === 'setmanal3') {
+      const abans = id ? trobar(cat, id) : null;
+      if (abans && abans.freq === freq && abans.diaSetmana === reg.diaSetmana && abans.ancora) reg.ancora = abans.ancora;
+      else { let d = avuiISO(); while (crearData(d, '12:00').getDay() !== reg.diaSetmana) d = sumarDies(d, 1); reg.ancora = d; }
+    }
+  } else if (cat === 'cites') {
+    reg = { motiu: val('motiu'), data: val('data'), hora: val('hora'), obs: val('obs') };
+    if (!reg.motiu) err('motiu', 'err_cita_motiu');
+    if (!esDataValida(reg.data)) err('data', 'err_data');
+    if (!esHoraValida(reg.hora)) err('hora', 'err_hora');
+  } else {
+    reg = { nom: val('nom'), data: val('data'), hora: val('hora'), notes: val('notes'), rep: val('rep') || 'un', dies: [] };
+    if (!reg.nom) err('nom', 'err_agenda_nom');
+    if (!esDataValida(reg.data)) err('data', 'err_data');
+    if (!esHoraValida(reg.hora)) err('hora', 'err_hora');
     if (reg.rep === 'dies') {
       reg.dies = f.getAll('repdies').map(Number);
       if (!reg.dies.length) err('repdies', 'err_dies');
     }
   }
-  if (cat !== 'med' && avis && ANTELACIONS[cat].indexOf(antelacio) === -1) err('antelacio', 'err_avis');
 
   if (errors.length) {
     form.querySelector('#resum-errors').innerHTML = '<div class="missatge missatge-error" role="alert">' + icona('alerta') + '<div class="text">' + esc(t('revisa')) + '</div></div>';
     const primer = errors[0];
-    const control = form.querySelector('#' + primer) || form.querySelector('#grup-' + primer + ' input') || form.querySelector('input[name="hora"]');
+    const control = form.querySelector('#' + primer) || form.querySelector('#grup-' + primer + ' input');
     if (control) control.focus();
+    window.scrollTo(0, 0);
     return;
   }
 
   const col = dades[CATEGORIES[cat].col];
+  const ambMoments = cat === 'med' || cat === 'act';
   if (id) {
     const existent = trobar(cat, id);
     if (!existent) { anar(CATEGORIES[cat].ruta, { tipus: 'error', text: t('no_trobat') }); return; }
+    if (ambMoments) {
+      // Si es canvia quan es fa, es compta des d'ara (no apareixen moments d'avui que ja han passat).
+      const clauPla = function (x) { return JSON.stringify([x.moments, x.freq, x.dies, x.freq === 'setmanal' ? x.diaSetmana : 0, x.freq === 'mensual' ? x.diaMes : 0]); };
+      reg.creat = clauPla(reg) === clauPla(existent) ? existent.creat : ahoText();
+    }
     Object.assign(existent, reg);
     reg = existent;
   } else {
     reg.id = nouId(cat.charAt(0));
+    if (ambMoments) reg.creat = ahoText();
     col.push(reg);
   }
   desar();
-
-  const nom = titolDe(cat, reg);
-  let text;
-  if (!reg.avis) text = t('desat_sense_avis', { nom: nom });
-  else {
-    const p = primerAvis(dades, cat, reg.id, new Date());
-    text = p ? t('desat_amb_avis', { nom: nom, quan: quanText(dataISO(p.avisQuan), dosXifres(p.avisQuan.getHours()) + ':' + dosXifres(p.avisQuan.getMinutes())) })
-      : t('desat_avis_passat', { nom: nom });
-  }
-  anar(CATEGORIES[cat].ruta, { tipus: 'ok', text: text });
+  anar(CATEGORIES[cat].ruta + (id ? '-llista' : ''), { tipus: 'ok', text: t('desat', { nom: titolDe(cat, reg) }) });
 }
 
 // ================= Accions (clics) =================
@@ -789,18 +857,6 @@ main.addEventListener('click', function (e) {
     const zona = document.getElementById('error-' + camp.id); if (zona) zona.innerHTML = '';
     anunciar(diaRelatiu(camp.value, true) + ', ' + dataLlarga(camp.value));
   }
-  if (accio === 'afegir-hora') {
-    const llista = document.getElementById('llista-hores');
-    const n = llista.querySelectorAll('.fila-hora').length + 1;
-    llista.insertAdjacentHTML('beforeend', filaHora(n, '', true));
-    renumerarHores();
-    document.getElementById('hora-' + n).focus();
-  }
-  if (accio === 'treure-hora') {
-    b.closest('.fila-hora').remove();
-    renumerarHores();
-    const primer = document.querySelector('#llista-hores input'); if (primer) primer.focus();
-  }
   if (accio === 'esborrar') confirmarEsborrar(b.getAttribute('data-cat'), b.getAttribute('data-id'));
   if (accio === 'presa') canviarPresa(b.getAttribute('data-clau'));
   if (accio === 'treure-avis') confirmarTreureAvis(b.getAttribute('data-clau'));
@@ -808,16 +864,15 @@ main.addEventListener('click', function (e) {
   if (accio === 'desfer-fet') desferFet(b.getAttribute('data-clau'));
 });
 
+// Medicació i exercicis: el «Fet» es marca directament (i es pot desfer). Ho comparteixen els dos botons (Fet / Desfer).
 function canviarPresa(clau) {
-  const parts = clau.split('|');
-  const med = trobar('med', parts[1]);
+  const o = buscarOcurrencia(dades, clau);
   const feta = !dades.preses[clau];
   if (feta) dades.preses[clau] = true; else delete dades.preses[clau];
   desar();
-  const nom = med ? med.nom : '';
-  focusDespres = '[data-accio="presa"][data-clau="' + clau.replace(/"/g, '\\"') + '"]';
+  focusDespres = selectorBoto('presa', clau);
   render();
-  anunciar(t(feta ? 'presa_marcada' : 'presa_desfeta', { nom: nom, hora: horaCurta(parts[3]) }));
+  if (o) anunciar(t(feta ? 'fet_marcat' : 'fet_desmarcat', { nom: o.titol, quan: quanOcurrencia(o) }));
 }
 
 // ---------- Marcar una tasca com a feta (amb confirmació) ----------
@@ -826,17 +881,30 @@ function selectorBoto(accio, clau) { return '[data-accio="' + accio + '"][data-c
 function confirmarFet(clau) {
   const o = buscarOcurrencia(dades, clau);
   if (!o) return;
+  const esCita = o.cat === 'cites';
   const dlg = document.getElementById('dlg-fet');
   const si = document.getElementById('fet-si');
   const no = document.getElementById('fet-no');
-  const valors = { nom: o.titol, quan: quanText(o.data, o.hora) };
-  document.getElementById('fet-titol').textContent = t('fet_titol');
-  document.getElementById('fet-text').textContent = t('fet_text', valors);
+  const valors = { nom: o.titol, quan: quanOcurrencia(o) };
+  document.getElementById('fet-titol').textContent = t(esCita ? 'fet_titol_cita' : 'fet_titol');
+  document.getElementById('fet-text').textContent = t(esCita ? 'fet_text_cita' : 'fet_text', valors);
   si.innerHTML = icona('check') + esc(t('fet_si'));
   no.textContent = t('fet_no');
   const origen = document.activeElement;
   si.onclick = function () {
     dlg.close();
+    if (esCita) {
+      // Una cita feta desapareix de tot arreu (pantalla d'inici, «La propera cita» i «Les meves cites»).
+      dades.cites = dades.cites.filter(function (c) { return c.id !== o.id; });
+      ['preses', 'descartats'].forEach(function (c) {
+        Object.keys(dades[c] || {}).forEach(function (k) { const p = k.split('|'); if (p[0] === 'cites' && p[1] === o.id) delete dades[c][k]; });
+      });
+      desar();
+      focusDespres = null;
+      render();
+      anunciar(t('fet_marcat', valors));
+      return;
+    }
     dades.preses[clau] = true;
     desar();
     focusDespres = selectorBoto('desfer-fet', clau);
@@ -858,43 +926,29 @@ function desferFet(clau) {
   if (o) anunciar(t('fet_desmarcat', { nom: o.titol }));
 }
 
-// ---------- Treure un recordatori amb confirmació ----------
-// Només es treu l'avís. El medicament, la cita o la tasca continuen guardats al seu apartat.
+// ---------- Treure de la llista amb confirmació ----------
+// Només es treu aquesta vegada. El medicament, la cita o la tasca continuen guardats al seu apartat.
 function confirmarTreureAvis(clau) {
   const o = buscarOcurrencia(dades, clau);
   if (!o) return;
   const dlg = document.getElementById('dlg-treure');
-  const una = document.getElementById('treure-una');
-  const totes = document.getElementById('treure-totes');
+  const si = document.getElementById('treure-una');
   const no = document.getElementById('treure-no');
-  const rep = esRepetit(o);
-  const valors = { nom: o.titol, quan: quanText(o.data, o.hora), apartat: t(CATEGORIES[o.cat].nom) };
+  const valors = { nom: o.titol, quan: quanOcurrencia(o), apartat: t(CATEGORIES[o.cat].nom) };
 
   document.getElementById('treure-titol').textContent = t('treure_titol');
-  document.getElementById('treure-text').textContent = t(rep ? 'treure_text_rep' : 'treure_text_un', valors);
-  una.textContent = t(rep ? 'treure_una' : 'treure_si');
-  totes.textContent = t('treure_totes');
-  totes.hidden = !rep;
+  document.getElementById('treure-text').textContent = t('treure_text', valors);
+  si.textContent = t('treure_si');
   no.textContent = t('treure_no');
   const origen = document.activeElement;
-  const sortir = function (missatge) {
+  si.onclick = function () {
     dlg.close();
+    if (!dades.descartats) dades.descartats = {};
+    dades.descartats[clau] = true;
     desar();
     anar(location.hash.replace(/^#/, '') || 'inici');  // sense missatge visible: la tasca simplement desapareix de la llista
-    anunciar(missatge);                                // només s'anuncia als lectors de pantalla
+    anunciar(t('tret_ok', valors));                    // només s'anuncia als lectors de pantalla
   };
-
-  una.onclick = function () {
-    if (rep) {
-      if (!dades.descartats) dades.descartats = {};
-      dades.descartats[clau] = true;
-      sortir(t('avis_tret_una', valors));
-    } else {
-      o.registre.avis = false;
-      sortir(t('avis_tret_tots', valors));
-    }
-  };
-  totes.onclick = function () { o.registre.avis = false; sortir(t('avis_tret_tots', valors)); };
   no.onclick = function () { dlg.close(); if (origen) origen.focus(); };
   dlg.showModal();
   no.focus({ preventScroll: true }); // l'opció segura rep el focus
@@ -917,9 +971,11 @@ function confirmarEsborrar(cat, id) {
   si.onclick = function () {
     dlg.close();
     dades[CATEGORIES[cat].col] = dades[CATEGORIES[cat].col].filter(function (x) { return x.id !== id; });
-    if (cat === 'med') Object.keys(dades.preses).forEach(function (k) { if (k.split('|')[1] === id) delete dades.preses[k]; });
+    ['preses', 'descartats'].forEach(function (c) {
+      Object.keys(dades[c] || {}).forEach(function (k) { const p = k.split('|'); if (p[0] === cat && p[1] === id) delete dades[c][k]; });
+    });
     desar();
-    anar(CATEGORIES[cat].ruta, { tipus: 'ok', text: t('esborrat', { nom: nom }) });
+    anar(CATEGORIES[cat].ruta + '-llista', { tipus: 'ok', text: t('esborrat', { nom: nom }) });
   };
   no.onclick = function () { dlg.close(); if (origen) origen.focus(); };
   dlg.showModal();
@@ -1010,7 +1066,7 @@ function exempleAvis() {
   const hora = dosXifres(ara.getHours()) + ':' + dosXifres(ara.getMinutes());
   return {
     cat: 'agenda', id: '', titol: t('exemple_titol'), data: avuiISO(), hora: hora, quan: ara,
-    registre: { nom: t('exemple_titol'), notes: '', avis: true, antelacio: 0 }, clau: 'exemple', antelacio: 0,
+    registre: { nom: t('exemple_titol'), notes: '' }, moment: '', clau: 'exemple', antelacio: 0,
   };
 }
 
@@ -1019,19 +1075,19 @@ function mostrarSeguentAvis() {
   if (!cuaAvisos.length || document.querySelector('dialog[open]')) return;
   const o = cuaAvisos.shift();
   const r = o.registre;
-  const quan = quanText(o.data, o.hora);
+  const quan = quanOcurrencia(o);
   let cos = '';
-  if (o.cat === 'med') cos = '<p>' + esc(t('avis_ara_presa')) + '</p><p class="avis-titol" id="avis-titol">' + esc(o.titol) + '</p><p><strong>' + esc(t('dosi_x', { x: r.dosi })) + '</strong></p><p>' + esc(t('hora_x', { hora: horaCurta(o.hora) })) + '</p>';
+  if (o.cat === 'med') cos = '<p>' + esc(t('avis_ara_presa')) + '</p><p class="avis-titol" id="avis-titol">' + esc(o.titol) + '</p><p><strong>' + esc(t('dosi_x', { x: r.dosi })) + '</strong></p><p>' + esc(majuscula(quan)) + '</p>';
   else {
     const frase = o.cat === 'cites' ? 'avis_cita' : (o.cat === 'act' ? 'avis_act' : 'avis_agenda');
     cos = '<p class="avis-titol" id="avis-titol">' + esc(o.titol) + '</p><p><strong>' + esc(t(frase, { quan: quan })) + '</strong></p>';
     const detall = detallOcurrencia(o);
     if (detall) cos += '<p>' + esc(detall) + '</p>';
-    if (o.cat === 'cites' && r.obs) cos += '<p>' + esc(r.obs) + '</p>';
   }
-  const botons = (o.cat === 'med' && o.data === avuiISO() && !dades.preses[o.clau]
-    ? '<button type="button" class="boto boto-principal" id="avis-presa">' + icona('check') + esc(t('ja_presa')) + '</button>' : '') +
-    '<button type="button" class="boto ' + (o.cat === 'med' ? 'boto-secundari' : 'boto-principal') + '" id="avis-dacord">' + esc(t('dacord')) + '</button>';
+  const fetPossible = (o.cat === 'med' || o.cat === 'act') && o.data === avuiISO() && !dades.preses[o.clau];
+  const botons = (fetPossible
+    ? '<button type="button" class="boto boto-principal" id="avis-presa">' + icona('check') + esc(t('fet_boto')) + '</button>' : '') +
+    '<button type="button" class="boto ' + (fetPossible ? 'boto-secundari' : 'boto-principal') + '" id="avis-dacord">' + esc(t('dacord')) + '</button>';
 
   dlg.className = 'finestra finestra-avis cat-' + o.cat;
   document.getElementById('avis-contingut').innerHTML =
@@ -1046,7 +1102,7 @@ function mostrarSeguentAvis() {
     dades.preses[o.clau] = true; desar();
     dlg.close();
     focusDespres = null; render();
-    anunciar(t('presa_marcada', { nom: o.titol, hora: horaCurta(o.hora) }));
+    anunciar(t('fet_marcat', { nom: o.titol, quan: quan }));
     setTimeout(mostrarSeguentAvis, 300);
   };
   dlg.showModal();
@@ -1065,21 +1121,17 @@ function refrescarPantalla() {
   const ara = new Date();
   const hora = document.getElementById('hora-actual-valor'); if (hora) hora.textContent = horaAra(ara);
   const salut = document.getElementById('salutacio-text'); if (salut) salut.textContent = t(claveSalutacio(ara));
+  if (document.getElementById('formulari')) return;
 
-  const r = ruta();
-  const esTasques = r.vista === 'recordatoris' || (!catDeRuta(r.vista) && r.vista !== 'recordatoris');
-  if (!esTasques || document.getElementById('formulari')) return;
-  const dies = r.vista === 'recordatoris' ? (r.accio === '7' ? 7 : 3) : 3;
-
-  // Tasques que acaben de passar d'hora: s'anuncien als lectors de pantalla (no a la primera passada).
-  const vencudes = tasquesProperes(dades, ara, dies).filter(function (o) { return !dades.preses[o.clau] && o.quan <= ara; });
+  // Coses que acaben de passar d'hora: s'anuncien als lectors de pantalla (no a la primera passada).
+  const vencudes = ocurrenciesVisibles(ara).filter(function (o) { return !dades.preses[o.clau] && o.venc <= ara; });
   if (vencudesConegudes) {
     const noves = vencudes.filter(function (o) { return !vencudesConegudes.has(o.clau); });
-    if (noves.length) anunciar(t('vencuda_anunci', { nom: noves[0].titol, hora: horaCurta(noves[0].hora) }));
+    if (noves.length) anunciar(t('vencuda_anunci', { nom: noves[0].titol }));
   }
   vencudesConegudes = new Set(vencudes.map(function (o) { return o.clau; }));
 
-  if (firmaTasques(dies) === firmaMostrada || algunDialegObert()) return;
+  if (firmaPantalla() === firmaMostrada || algunDialegObert()) return;
   const y = window.scrollY;
   const actiu = document.activeElement;
   if (actiu && main.contains(actiu) && actiu.getAttribute('data-clau')) {
